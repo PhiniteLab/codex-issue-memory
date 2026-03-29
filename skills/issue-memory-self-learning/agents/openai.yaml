@@ -1,0 +1,10 @@
+interface:
+  display_name: "Issue Memory"
+  short_description: "Retrieve known fixes and write back verified recurring solutions."
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "issue_memory"
+      description: "Local issue memory MCP server"

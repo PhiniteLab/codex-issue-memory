@@ -1,0 +1,16 @@
+{
+  "include": [
+    "src",
+    "tests",
+    "scripts"
+  ],
+  "exclude": [
+    "build",
+    "dist",
+    "**/__pycache__"
+  ],
+  "extraPaths": [
+    "src"
+  ],
+  "pythonVersion": "3.10"
+}

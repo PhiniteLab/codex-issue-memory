@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and runtime state
+*.log
+logs/
+state/
+tmp/
+.cache/
+
+# Databases and memory artifacts
+*.sqlite3
+*.sqlite
+*.db
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# Secrets / environment
+.env
+.env.*
+secrets/
+*.pem
+*.key
+
+# Backups / exports
+backups/
+exports/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node (if helpers are added)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Misc
+*.bak
+*.tmp

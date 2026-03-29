@@ -1,0 +1,94 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - pyproject.toml
+      - src/codex_issue_memory/__init__.py
+      - CHANGELOG.md
+      - RELEASE_NOTES.md
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          pyproject = pathlib.Path("pyproject.toml").read_text()
+          package_init = pathlib.Path("src/codex_issue_memory/__init__.py").read_text()
+
+          project_match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
+          init_match = re.search(r'^__version__\s*=\s*"([^"]+)"', package_init, re.M)
+
+          if not project_match:
+              raise SystemExit("Could not find project version in pyproject.toml")
+          if not init_match:
+              raise SystemExit("Could not find __version__ in src/codex_issue_memory/__init__.py")
+
+          project_version = project_match.group(1)
+          init_version = init_match.group(1)
+
+          if project_version != init_version:
+              raise SystemExit(
+                  f"Version mismatch: pyproject.toml={project_version!r} "
+                  f"src/codex_issue_memory/__init__.py={init_version!r}"
+              )
+
+          output_path = pathlib.Path(__import__("os").environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as fh:
+              fh.write(f"version={project_version}\n")
+              fh.write(f"tag=v{project_version}\n")
+          PY
+
+      - name: Ensure version tag exists
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          title="Release ${VERSION}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$title" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$TAG" --title "$title" --notes-file RELEASE_NOTES.md --target "$GITHUB_SHA"
+          fi
