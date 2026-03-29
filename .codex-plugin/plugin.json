@@ -1,0 +1,25 @@
+{
+  "name": "codex-issue-memory",
+  "version": "0.1.0",
+  "description": "Local-first issue memory MCP package for Codex with SQLite-backed retrieval and operational tooling.",
+  "author": {
+    "name": "Mehmet"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "mcp",
+    "issue-memory",
+    "debugging",
+    "sqlite"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "codex-issue-memory",
+    "shortDescription": "Local-first Codex issue-memory MCP with retrieval, feedback, and operational controls.",
+    "longDescription": "codex-issue-memory stores reusable debugging knowledge in local SQLite and provides ranked issue matches, feedback workflows, preferences, guardrails, and health/operations tooling for stable daily use in Codex and local agent setups.",
+    "developerName": "Mehmet",
+    "category": "Productivity"
+  }
+}

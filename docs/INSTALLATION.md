@@ -10,6 +10,14 @@ Public users should keep these rules in mind:
 - the live custom plugin / skill root is `~/.codex/local-plugins/**`
 - bundled skill content in this repository is reference-only; any live custom wrapper should live under `~/.codex/local-plugins/**`
 - example files in this repository are reference material, not live registration
+- this release adds `~/.codex/local-plugins`-friendly wrapper files (`.codex-plugin/plugin.json` and `.mcp.json`) for distribution only
+
+`README.md` documents two install modes:
+
+- **Mode A:** standard MCP install (writes live `~/.codex/config.toml` registration)
+- **Mode B:** plugin-wrapper/local plugin install (kept as distribution/reference assets)
+
+Mode B alone does not create the live Python environment or authoritative MCP registration; keep using Mode A or the documented manual `config.toml` flow for the actual server runtime.
 
 ## Requirements
 
@@ -44,7 +52,7 @@ sudo apt install -y rsync cron sqlite3
 ## Recommended installed setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/PhiniteLab/codex-issue-memory.git
 cd codex-issue-memory
 bash install.sh
 ```
@@ -73,6 +81,7 @@ By default, the installer uses:
 6. backup helpers and optional cron integration
 
 The repository still contains bundled skill content under `skills/`, but public users should treat `~/.codex/local-plugins/**` as the live custom skill / plugin root.
+The `.mcp.json` file is a template surface (`remote` + `local command`) and does **not** replace the authoritative `~/.codex/config.toml` MCP registration.
 
 ## Verify the live setup
 

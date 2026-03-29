@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "issue-memory-remote-template": {
+      "type": "http",
+      "url": "https://example.invalid/mcp/issue-memory"
+    },
+    "issue-memory-local-command-template": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "-m",
+        "codex_issue_memory.server"
+      ]
+    }
+  }
+}
