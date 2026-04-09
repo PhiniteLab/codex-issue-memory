@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from typing import Any
 
 from codex_issue_memory.lifecycle import read_server_lifecycle_status
 from codex_issue_memory.settings import Settings
@@ -34,6 +35,9 @@ class ServerLifecycleTests(unittest.TestCase):
         "ISSUE_MEMORY_SERVER_OWNER_ROLE",
         "ISSUE_MEMORY_MCP_OWNER_KEY",
         "ISSUE_MEMORY_MCP_OWNER_KEY_ENV",
+        "ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON",
+        "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS",
+        "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS",
         "CODEX_CONVERSATION_ID",
         "CODEX_HOME",
         "CODEX_THREAD_ID",
@@ -54,6 +58,9 @@ class ServerLifecycleTests(unittest.TestCase):
         os.environ["ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE"] = "1"
         os.environ["ISSUE_MEMORY_MAX_MCP_INSTANCES"] = "1"
         os.environ["CODEX_HOME"] = str(base / ".codex")
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS"] = "0.25"
         os.environ.pop("CODEX_THREAD_ID", None)
 
     def tearDown(self) -> None:
@@ -245,6 +252,298 @@ class ServerLifecycleTests(unittest.TestCase):
             for proc in procs:
                 if proc.poll() is None:
                     proc.kill()
+
+
+    def test_parent_singleton_guard_rejects_duplicate_with_exit_code_75(self) -> None:
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "1"
+        os.environ["ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE"] = "0"
+        os.environ["ISSUE_MEMORY_MAX_MCP_INSTANCES"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY"] = "0"
+
+        repo_src = str(Path(__file__).resolve().parents[1] / "src")
+        child_code = (
+            "import signal, sys, time\n"
+            "from codex_issue_memory.lifecycle import MCPServerLifecycle, MCPServerOwnerConflict\n"
+            "from codex_issue_memory.settings import Settings\n"
+            "l = MCPServerLifecycle(Settings.from_env())\n"
+            "try:\n"
+            "    l.start()\n"
+            "    print(f'STARTED:{l._slot}', flush=True)\n"
+            "    signal.signal(signal.SIGTERM, lambda *args: sys.exit(0))\n"
+            "    while True:\n"
+            "        time.sleep(0.2)\n"
+            "except MCPServerOwnerConflict as exc:\n"
+            "    print(f'ERROR:{exc}', file=sys.stderr, flush=True)\n"
+            "    sys.exit(exc.exit_code)\n"
+            "except Exception as exc:\n"
+            "    print(f'ERROR:{exc}', file=sys.stderr, flush=True)\n"
+            "    sys.exit(1)\n"
+        )
+
+        env = os.environ.copy()
+        env["PYTHONPATH"] = repo_src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+
+        procs: list[subprocess.Popen[str]] = []
+        duplicate: subprocess.Popen[str] | None = None
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, "-c", child_code],
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            procs.append(proc)
+            started = proc.stdout.readline().strip() if proc.stdout is not None else ""
+            self.assertTrue(started.startswith("STARTED:"), msg=f"unexpected first child output: {started}")
+
+            duplicate = subprocess.Popen(
+                [sys.executable, "-c", child_code],
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            return_code = duplicate.wait(timeout=8)
+            stderr = duplicate.stderr.read() if duplicate.stderr is not None else ""
+            self.assertEqual(return_code, 75)
+            self.assertIn("parent process already has active instance", stderr)
+
+            status = read_server_lifecycle_status(Settings.from_env()).to_dict()
+            self.assertTrue(status["running"])
+            self.assertEqual(status["active_count"], 1)
+            self.assertTrue(status["parent_singleton_enforced"])
+            self.assertIsNone(status["shutdown_reason"])
+        finally:
+            for proc in procs:
+                proc.terminate()
+            if duplicate is not None and duplicate.poll() is None:
+                duplicate.terminate()
+            deadline = time.time() + 5
+            while time.time() < deadline and any(proc.poll() is None for proc in procs):
+                time.sleep(0.1)
+            for proc in procs:
+                if proc.poll() is None:
+                    proc.kill()
+
+    def test_stale_slot_cleanup_recovers_dead_process_slots(self) -> None:
+        os.environ["ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE"] = "0"
+        os.environ["ISSUE_MEMORY_MAX_MCP_INSTANCES"] = "4"
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY"] = "0"
+
+        repo_src = str(Path(__file__).resolve().parents[1] / "src")
+        child_code = (
+            "import signal, sys, time\n"
+            "from codex_issue_memory.lifecycle import MCPServerLifecycle\n"
+            "from codex_issue_memory.settings import Settings\n"
+            "l = MCPServerLifecycle(Settings.from_env())\n"
+            "l.start()\n"
+            "print(f'STARTED:{l._slot}', flush=True)\n"
+            "signal.signal(signal.SIGTERM, lambda *args: sys.exit(0))\n"
+            "while True:\n"
+            "    time.sleep(0.2)\n"
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = repo_src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child_code],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            started = proc.stdout.readline().strip() if proc.stdout is not None else ""
+            self.assertTrue(started.startswith("STARTED:"), msg=f"unexpected child output: {started}")
+        finally:
+            proc.kill()
+            proc.wait(timeout=5)
+            time.sleep(0.5)
+
+            status = read_server_lifecycle_status(Settings.from_env()).to_dict()
+            self.assertFalse(status["running"])
+            self.assertEqual(status["active_count"], 0)
+
+            slot_files = sorted((Path(os.environ["ISSUE_MEMORY_STATE_DIR"]) / "mcp_slots").glob("issue_memory_mcp_slot_*.json"))
+            self.assertTrue(slot_files, "expected slot status file to exist")
+            payload = json.loads(slot_files[0].read_text(encoding="utf-8"))
+            self.assertFalse(payload.get("running", False))
+            self.assertEqual(payload.get("shutdown_reason"), "stale-slot-pid-gone")
+
+    def test_idle_timeout_stops_instance(self) -> None:
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"] = "1"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS"] = "0.2"
+
+        repo_src = str(Path(__file__).resolve().parents[1] / "src")
+        child_code = (
+            "import time\n"
+            "from codex_issue_memory.lifecycle import MCPServerLifecycle\n"
+            "from codex_issue_memory.settings import Settings\n"
+            "l = MCPServerLifecycle(Settings.from_env())\n"
+            "l.start()\n"
+            "l.mark_initialized()\n"
+            "print('READY', flush=True)\n"
+            "while True:\n"
+            "    time.sleep(0.2)\n"
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = repo_src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child_code],
+            env=env,
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            ready = proc.stdout.readline().strip() if proc.stdout is not None else ""
+            self.assertEqual(ready, "READY")
+            deadline = time.time() + 6
+            status_dict: dict[str, Any] | None = None
+            while time.time() < deadline:
+                status_dict = read_server_lifecycle_status(Settings.from_env()).to_dict()
+                if not status_dict["running"] and status_dict["shutdown_reason"] == "idle-timeout":
+                    break
+                time.sleep(0.2)
+            if status_dict is None:
+                self.fail("did not observe idle-timeout shutdown state")
+            status = status_dict
+            self.assertFalse(status["running"])
+            self.assertEqual(status["shutdown_reason"], "idle-timeout")
+        finally:
+            if proc.stdin is not None and not proc.stdin.closed:
+                proc.stdin.close()
+            deadline = time.time() + 5
+            while time.time() < deadline and proc.poll() is None:
+                time.sleep(0.1)
+            if proc.poll() is None:
+                proc.terminate()
+                time.sleep(0.5)
+            if proc.poll() is None:
+                proc.kill()
+
+    def test_parent_death_shuts_down_instance(self) -> None:
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "1"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS"] = "0.2"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"] = "0"
+
+        repo_src = str(Path(__file__).resolve().parents[1] / "src")
+        scripts_dir = Path(self.temp_dir.name) / "mcp-lifecycle-parent-death"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        server_script = scripts_dir / "server_runner.py"
+        wrapper_script = scripts_dir / "launch_and_exit.py"
+        server_script.write_text(
+            "import time\n"
+            "from codex_issue_memory.lifecycle import MCPServerLifecycle\n"
+            "from codex_issue_memory.settings import Settings\n"
+            "l = MCPServerLifecycle(Settings.from_env())\n"
+            "l.start()\n"
+            "l.mark_initialized()\n"
+            "while True:\n"
+            "    time.sleep(0.2)\n",
+            encoding="utf-8",
+        )
+        wrapper_script.write_text(
+            "import os\n"
+            "import subprocess\n"
+            "import sys\n"
+            "import time\n"
+            f"server = {str(server_script)!r}\n"
+            "env = os.environ.copy()\n"
+            "proc = subprocess.Popen([sys.executable, server], env=env)\n"
+            "print(proc.pid, flush=True)\n"
+            "time.sleep(1.0)\n",
+            encoding="utf-8",
+        )
+
+        launcher_env = os.environ.copy()
+        launcher_env["PYTHONPATH"] = repo_src + (os.pathsep + launcher_env["PYTHONPATH"] if launcher_env.get("PYTHONPATH") else "")
+        launcher = subprocess.run(
+            [sys.executable, str(wrapper_script)],
+            env=launcher_env,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=scripts_dir,
+        )
+        self.assertEqual(launcher.returncode, 0, msg=launcher.stderr)
+        server_pid = int((launcher.stdout or "").strip() or "0")
+        self.assertGreater(server_pid, 0)
+
+        try:
+            deadline = time.time() + 6
+            status_dict: dict[str, Any] | None = None
+            while time.time() < deadline:
+                status_dict = read_server_lifecycle_status(Settings.from_env()).to_dict()
+                if not status_dict["running"] and status_dict["shutdown_reason"] == "parent-death":
+                    break
+                time.sleep(0.2)
+            if status_dict is None:
+                self.fail("did not observe parent-death shutdown state")
+            status = status_dict
+            self.assertFalse(status["running"])
+            self.assertEqual(status["shutdown_reason"], "parent-death")
+            death_deadline = time.time() + 5
+            while time.time() < death_deadline:
+                try:
+                    os.kill(server_pid, 0)
+                except OSError:
+                    break
+                time.sleep(0.2)
+            else:
+                self.fail("server process remained alive after parent-death shutdown")
+        finally:
+            try:
+                os.kill(server_pid, 15)
+            except OSError:
+                pass
+
+    def test_stdin_eof_shuts_down_instance(self) -> None:
+        os.environ["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"] = "0"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS"] = "0.2"
+        os.environ["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"] = "0"
+
+        repo_src = str(Path(__file__).resolve().parents[1] / "src")
+        child_code = (
+            "import time\n"
+            "from codex_issue_memory.lifecycle import MCPServerLifecycle\n"
+            "from codex_issue_memory.settings import Settings\n"
+            "l = MCPServerLifecycle(Settings.from_env())\n"
+            "l.start()\n"
+            "l.mark_initialized()\n"
+            "print('READY', flush=True)\n"
+            "try:\n"
+            "    while True:\n"
+            "        time.sleep(0.2)\n"
+            "except KeyboardInterrupt:\n"
+            "    print(f'SHUTDOWN:{l.shutdown_reason}', flush=True)\n"
+            "finally:\n"
+            "    l.release()\n"
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = repo_src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child_code],
+            env=env,
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        ready = proc.stdout.readline().strip() if proc.stdout is not None else ""
+        self.assertEqual(ready, "READY")
+        assert proc.stdin is not None
+        proc.stdin.close()
+        proc.wait(timeout=8)
+        stdout = proc.stdout.read() if proc.stdout is not None else ""
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr.read() if proc.stderr is not None else "")
+        self.assertIn("SHUTDOWN:stdin-eof", stdout)
 
     def test_owner_only_mode_requires_owner_key(self) -> None:
         os.environ["ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE"] = "0"

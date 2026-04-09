@@ -286,6 +286,9 @@ def main() -> None:
         raise SystemExit(1) from exc
     try:
         mcp.run()
+    except KeyboardInterrupt:
+        if not lifecycle.shutdown_reason:
+            raise
     finally:
         lifecycle.release()
 

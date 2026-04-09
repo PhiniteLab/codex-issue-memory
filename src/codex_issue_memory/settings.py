@@ -56,6 +56,9 @@ class Settings:
     server_owner_key: str
     server_owner_key_env: str
     server_owner_role: str
+    server_enforce_parent_singleton: bool
+    server_parent_instance_idle_timeout_seconds: int
+    server_parent_instance_monitor_interval_seconds: float
     env_json_max_chars: int
     verification_output_max_chars: int
     note_max_chars: int
@@ -105,6 +108,21 @@ class Settings:
             or os.environ.get("ISSUE_MEMORY_SERVER_OWNER_KEY_ENV", "").strip()
             or os.environ.get("ISSUE_MEMORY_MCP_OWNER_KEY_ENV", "").strip()
         )
+
+        server_enforce_parent_singleton = (
+            os.environ.get("ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON", "0").strip().lower()
+            not in {"0", "false", "no"}
+        )
+        raw_idle_timeout = os.environ.get("ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS", "0").strip()
+        try:
+            server_parent_instance_idle_timeout_seconds = max(int(raw_idle_timeout or "0"), 0)
+        except ValueError:
+            server_parent_instance_idle_timeout_seconds = 0
+        raw_parent_monitor_interval = os.environ.get("ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS", "1.0").strip()
+        try:
+            server_parent_instance_monitor_interval_seconds = max(float(raw_parent_monitor_interval or "1.0"), 0.2)
+        except ValueError:
+            server_parent_instance_monitor_interval_seconds = 1.0
         owner_key = ""
         owner_key_source = ""
         for env_name in (
@@ -197,6 +215,9 @@ class Settings:
             max_mcp_instances=max_mcp_instances,
             server_lock_dir=server_lock_dir,
             server_duplicate_exit_code=duplicate_exit_code,
+            server_enforce_parent_singleton=server_enforce_parent_singleton,
+            server_parent_instance_idle_timeout_seconds=server_parent_instance_idle_timeout_seconds,
+            server_parent_instance_monitor_interval_seconds=server_parent_instance_monitor_interval_seconds,
             server_require_owner_key=require_owner_key,
             server_owner_key=owner_key,
             server_owner_key_env=owner_key_env,
