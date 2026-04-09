@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..storage import IssueMemoryStore
+from ..storage import IssueMemoryStore, WEAK_FEEDBACK_WEIGHTS
 from .session_service import SessionService
 
 
@@ -20,6 +20,7 @@ DEFAULT_REWARDS: dict[str, float] = {
 POSITIVE_FEEDBACK = {"candidate_accepted", "fix_verified", "merge_confirmed", "split_confirmed"}
 NEGATIVE_FEEDBACK = {"candidate_rejected", "false_positive", "merge_rejected", "split_rejected"}
 GLOBAL_LEARNING_FEEDBACK = {"fix_verified", "false_positive"}
+LEARNABLE_FEEDBACK = GLOBAL_LEARNING_FEEDBACK | set(WEAK_FEEDBACK_WEIGHTS)
 
 
 class FeedbackService:
@@ -98,13 +99,26 @@ class FeedbackService:
         learning = None
 
         bandit_update = None
-        if self.store.settings.enable_strategy_bandit and feedback_type in GLOBAL_LEARNING_FEEDBACK:
+        if self.store.settings.enable_strategy_bandit and feedback_type in LEARNABLE_FEEDBACK:
             bandit_update = {
                 "policy": "conservative_hierarchical_thompson",
                 "global_update_applied": bool(feedback_result.get("global_update_applied", False)),
                 "strategy_stat_updates": feedback_result.get("strategy_stat_updates", []),
                 "variant_stat_update": feedback_result.get("variant_stat_update"),
             }
+
+        feature_log_count = 0
+        candidate_features = candidate.get("feature_json")
+        if isinstance(candidate_features, dict) and candidate_features:
+            feature_log_count = self.store.log_feature_outcomes(
+                feedback_event_id=int(feedback_row["id"]),
+                retrieval_candidate_id=int(candidate["id"]),
+                features=candidate_features,
+                feedback_type=feedback_type,
+                reward=applied_reward,
+                error_family=str(event.get("error_family", "")),
+                project_scope=str(event.get("project_scope", "global")),
+            )
 
         return {
             "status": "ok",
@@ -127,4 +141,5 @@ class FeedbackService:
             "session_memory": session_memory,
             "learning": learning,
             "bandit": bandit_update,
+            "feature_log_count": feature_log_count,
         }

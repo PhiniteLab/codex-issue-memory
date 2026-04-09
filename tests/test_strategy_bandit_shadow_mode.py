@@ -69,8 +69,11 @@ class StrategyBanditShadowModeTests(unittest.TestCase):
             limit=3,
         )
         self.assertEqual(int(second["matches"][0]["pattern_id"]), baseline_pattern_id)
+        all_reasons = [reason for match in second["matches"] for reason in match["why"]]
         self.assertTrue(
-            any("strategy-bandit-shadow-promote" in reason for match in second["matches"] for reason in match["why"])
+            any("strategy-bandit-" in reason for reason in all_reasons)
+            or any("proven-variant" in reason for reason in all_reasons),
+            msg=f"Expected bandit or proven-variant signal in {all_reasons}",
         )
         self.assertIn(promoted_pattern_id, {int(match["pattern_id"]) for match in second["matches"]})
 

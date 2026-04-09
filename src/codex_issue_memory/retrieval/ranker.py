@@ -38,10 +38,11 @@ class HeuristicRanker:
         "entity_match_score": 0.09,
         "entity_conflict_penalty_score": -0.18,
         "variant_score": 0.12,
-        "support_score": 0.02,
+        "support_score": 0.05,
         "recency_score": 0.02,
         "feedback_score": 0.12,
         "success_prior_score": 0.06,
+        "proven_score": 0.08,
         "session_boost_score": 0.04,
         "session_penalty_score": -0.24,
     }
@@ -141,24 +142,30 @@ class HeuristicRanker:
         return RankedCandidate(candidate=candidate, score=total, features=features, reasons=reasons)
 
     @staticmethod
+    def _quantize(value: float) -> int:
+        """Quantize a float score to a fixed-precision integer to ensure deterministic ordering."""
+        return int(round(value * 10000))
+
+    @staticmethod
     def _sort_key(
         item: RankedCandidate,
-    ) -> tuple[float, float, float, float, float, float, float, float, float, int, int]:
+    ) -> tuple[int, int, int, int, int, int, int, int, int, int, int]:
         candidate = item.candidate
         best_variant = candidate.get("best_variant") or {}
         variant_confidence = float(best_variant.get("confidence", 0.0)) if isinstance(best_variant, dict) else 0.0
         variant_id = int(candidate.get("variant_id", 0) or 0)
         pattern_id = int(candidate.get("pattern_id", candidate.get("id", 10**9)))
+        _q = HeuristicRanker._quantize
         return (
-            -item.score,
-            -item.features.get("preference_adjustment", 0.0),
-            -item.features.get("bandit_adjustment", 0.0),
-            -item.features.get("dense_score", 0.0),
-            -item.features.get("variant_score", 0.0),
-            -item.features.get("feedback_score", 0.0),
-            -item.features.get("root_score", 0.0),
-            -item.features.get("family_score", 0.0),
-            -variant_confidence,
+            -_q(item.score),
+            -_q(item.features.get("preference_adjustment", 0.0)),
+            -_q(item.features.get("bandit_adjustment", 0.0)),
+            -_q(item.features.get("dense_score", 0.0)),
+            -_q(item.features.get("variant_score", 0.0)),
+            -_q(item.features.get("feedback_score", 0.0)),
+            -_q(item.features.get("root_score", 0.0)),
+            -_q(item.features.get("family_score", 0.0)),
+            -_q(variant_confidence),
             pattern_id,
             variant_id,
         )

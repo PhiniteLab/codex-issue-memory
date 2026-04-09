@@ -157,7 +157,7 @@ class FeedbackLearningTests(unittest.TestCase):
         self.assertFalse(negative["global_update_applied"])
         self.assertIsNone(negative["pattern_update"])
         self.assertIsNone(negative["variant_update"])
-        self.assertIsNone(negative["variant_stat_update"])
+        self.assertIsNotNone(negative["variant_stat_update"])
         self.assertEqual(negative["strategy_stat_updates"], [])
 
         same_session = self.app.issue_match(
@@ -187,7 +187,7 @@ class FeedbackLearningTests(unittest.TestCase):
         weak_variant_stat = self.app.store.get_variant_stat(stored["variant_id"])
         assert weak_variant_stat is not None
         self.assertEqual(weak_variant_stat["success_count"], 1)
-        self.assertEqual(weak_variant_stat["failure_count"], 0)
+        self.assertEqual(weak_variant_stat["failure_count"], 1)
 
         positive = self.app.issue_feedback(
             retrieval_event_id=other_session["retrieval_event_id"],
@@ -197,6 +197,7 @@ class FeedbackLearningTests(unittest.TestCase):
         )
         self.assertTrue(positive["global_update_applied"])
         self.assertEqual(positive["variant_stat_update"]["success_count"], 2)
+        self.assertEqual(positive["variant_stat_update"]["failure_count"], 1)
 
         final_match = self.app.issue_match(
             error_text=query,

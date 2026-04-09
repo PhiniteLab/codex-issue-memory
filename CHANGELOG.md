@@ -4,6 +4,54 @@ All notable changes to this project should be documented in this file.
 
 The format is intentionally simple and human-readable.
 
+## 0.2.0 (2025-07-21)
+
+### Added
+
+- **Phase 0.1 — Feedback loop closure**: weak feedback types (`candidate_accepted`, `candidate_rejected`, `merge_confirmed`, `merge_rejected`, `split_confirmed`, `split_rejected`) now update variant statistics with fractional weights (0.25–0.40), closing ~60% of previously lost feedback signal
+- **Phase 0.2 — `proven_score` feature**: new Laplace-smoothed ranking feature `(success+1)/(used+2)` with weight 0.08; `support_score` weight raised from 0.02 to 0.05; "proven-variant" reason tag
+- **Phase 0.3 — Feature-outcome log**: new `feature_outcome_log` table (migration 010), `log_feature_outcomes()` / `query_feature_outcome_stats()` storage methods, automatic feature-outcome logging in feedback pipeline, `analyze-feature-importance` CLI command
+- `tests/test_phase0_improvements.py`: 15 tests covering all Phase 0 items
+- `docs/ROADMAP.md`: comprehensive development plan with 5 phases and 22 improvement items
+- learning pipeline internals section in `docs/ARCHITECTURE.md` covering posterior model, strategy bandit flow, 23 ranking features, and dense retrieval
+- known learning gaps section in `docs/ARCHITECTURE.md` documenting 6 key limitations
+- ROADMAP link in `docs/README.md` reading order and start-here list
+- calibration profile explanation in `docs/CONFIGURATION.md`
+- `session_id` usage guidance and dense retrieval explanation in `docs/USAGE.md`
+- owner-key troubleshooting entry in `docs/OPERATIONS.md`
+- `docs/ROLLOUT.md` pre-promotion readiness checklist and monitoring additions
+- feedback workflow section and scope discipline guidance in `skills/issue-memory-self-learning/SKILL.md`
+- concurrent safety test suite (`tests/test_concurrent_safety.py`, 11 tests)
+
+### Changed
+
+- `docs/README.md`: restructured reading order, added owner-key step (#3), moved orchestration checklist to additional references
+- `docs/ARCHITECTURE.md`: expanded from module map to include full learning pipeline documentation
+- `docs/USAGE.md`: improved `session_id` documentation and dense retrieval visibility
+- `docs/OPERATIONS.md`: added owner-key troubleshooting scenario
+- `docs/CONFIGURATION.md`: added calibration profile usage explanation
+- `docs/ROLLOUT.md`: added transition readiness checklist and dashboard monitoring guidance
+- `docs/DEVELOPMENT.md`: added roadmap and learning pipeline to contributor path
+- `skills/issue-memory-self-learning/SKILL.md`: major overhaul — added feedback workflow, scope discipline, session_id guidance, and guardrail/preference workflow
+- root `README.md`: updated test count (132), added roadmap doc reference
+- `RELEASE_NOTES.md`: v0.2.0 release notes
+
+### Fixed
+
+- streaming SHA256 hash in backup verification (P0 — memory safety)
+- lifecycle handle cleanup via try/finally guards and join timeout (P0 — resource leak)
+- fingerprint digest length 16→32 (P1 — collision reduction)
+- corrupt dense blob warning log instead of silent skip (P2)
+- JSON decode error warning log instead of silent failure (P2)
+- score quantization in ranker to prevent float noise leaking into decisions (P3)
+
+### Removed
+
+- dead code: `sanitize_mapping()` from security module
+- dead code: `update_pattern()`, `search_patterns()`, `record_feedback()`, `apply_feedback_update()` from storage
+- dead code: unused `decision_policy` attribute from matching
+- dead code: unused `enforce_single_mcp_instance` field from settings
+
 ## 0.1.0 (2026-03-29)
 
 ### Added

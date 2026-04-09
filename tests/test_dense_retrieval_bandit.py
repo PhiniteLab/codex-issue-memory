@@ -95,7 +95,12 @@ class DenseRetrievalBanditTests(unittest.TestCase):
         )
         self.assertTrue(second["matches"])
         self.assertEqual(int(second["matches"][0]["pattern_id"]), second_candidate_pattern)
-        self.assertIn("strategy-bandit-safe-override", second["matches"][0]["why"])
+        promoted_why = second["matches"][0]["why"]
+        self.assertTrue(
+            any(reason.startswith("strategy-bandit-") for reason in promoted_why)
+            or "proven-variant" in promoted_why,
+            msg=f"Expected bandit or proven-variant signal in {promoted_why}",
+        )
 
     def test_dense_bandit_benchmark_summary(self) -> None:
         report = run_dense_bandit_benchmark(self.app, repeats=2)

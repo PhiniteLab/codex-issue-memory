@@ -597,6 +597,16 @@ def cmd_export_dashboard(output: str, fmt: str, window_days: int) -> None:
     print(json.dumps({"status": "ok", "format": fmt, "path": str(output_path)}, indent=2))
 
 
+def cmd_analyze_feature_importance() -> None:
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    stats = store.query_feature_outcome_stats()
+    if not stats:
+        print(json.dumps({"status": "ok", "message": "No feature-outcome data yet. Submit feedback to populate."}, indent=2))
+        return
+    print(json.dumps({"status": "ok", "feature_count": len(stats), "stats": stats}, indent=2, default=str))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Maintenance commands for codex issue memory.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -651,6 +661,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--output", required=True)
     dashboard.add_argument("--format", choices=("json", "html"), default="json")
     dashboard.add_argument("--window-days", type=int, default=30)
+    subparsers.add_parser("analyze-feature-importance")
     return parser
 
 
@@ -710,6 +721,8 @@ def main() -> None:
         cmd_calibrate_thresholds(write_profile=bool(args.write_profile))
     elif args.command == "export-dashboard":
         cmd_export_dashboard(output=args.output, fmt=args.format, window_days=args.window_days)
+    elif args.command == "analyze-feature-importance":
+        cmd_analyze_feature_importance()
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 

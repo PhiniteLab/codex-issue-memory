@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
@@ -15,12 +16,24 @@ from .migrations import MigrationRunner, SchemaState
 from .normalization import comma_join, parse_tag_string, tokenize
 from .settings import Settings
 
+_logger = logging.getLogger(__name__)
+
 
 STRATEGY_PRIOR_ALPHA = 2.0
 STRATEGY_PRIOR_BETA = 2.0
 VARIANT_PRIOR_ALPHA = 1.0
 VARIANT_PRIOR_BETA = 1.0
 STRONG_GLOBAL_FEEDBACK = {'fix_verified', 'false_positive'}
+
+WEAK_FEEDBACK_WEIGHTS: dict[str, float] = {
+    'candidate_accepted': 0.35,
+    'candidate_rejected': 0.25,
+    'merge_confirmed': 0.40,
+    'merge_rejected': 0.40,
+    'split_confirmed': 0.40,
+    'split_rejected': 0.40,
+}
+WEAK_POSITIVE_FEEDBACK = {'candidate_accepted', 'merge_confirmed', 'split_confirmed'}
 
 
 def utc_now_iso() -> str:
@@ -153,6 +166,7 @@ class IssueMemoryStore:
         try:
             return json.loads(str(value))
         except (TypeError, ValueError, json.JSONDecodeError):
+            _logger.warning("Failed to decode JSON field (len=%d), using fallback", len(str(value)))
             return fallback
 
     @staticmethod
@@ -379,59 +393,6 @@ class IssueMemoryStore:
     def create_pattern(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.managed_connection() as conn:
             return self._create_pattern_tx(conn, payload)
-
-    def _overwrite_update_pattern_tx(self, conn: sqlite3.Connection, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-        now = utc_now_iso()
-        existing = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
-        if existing is None:
-            raise KeyError(f"Pattern {pattern_id} not found")
-
-        merged_tags = comma_join(parse_tag_string(existing["tags"]) + list(payload.get("tags", [])))
-        title = payload.get("title") or existing["title"]
-        canonical_symptom = payload.get("canonical_symptom") or existing["canonical_symptom"]
-        canonical_fix = payload.get("canonical_fix") or existing["canonical_fix"]
-        prevention_rule = payload.get("prevention_rule") or existing["prevention_rule"]
-        verification_steps = payload.get("verification_steps") or existing["verification_steps"]
-        error_family = payload.get("error_family") or existing["error_family"]
-        root_cause_class = payload.get("root_cause_class") or existing["root_cause_class"]
-        domain = payload.get("domain") or existing["domain"]
-        signature = payload.get("signature") or existing["signature"]
-        confidence = max(float(existing["confidence"]), float(payload.get("confidence", existing["confidence"])))
-        times_seen = int(existing["times_seen"]) + int(payload.get("times_seen_delta", 1))
-
-        conn.execute(
-            """
-            UPDATE issue_patterns
-            SET title = ?, domain = ?, error_family = ?, root_cause_class = ?,
-                canonical_symptom = ?, canonical_fix = ?, prevention_rule = ?,
-                verification_steps = ?, tags = ?, signature = ?,
-                times_seen = ?, confidence = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                title,
-                domain,
-                error_family,
-                root_cause_class,
-                canonical_symptom,
-                canonical_fix,
-                prevention_rule,
-                verification_steps,
-                merged_tags,
-                signature,
-                times_seen,
-                confidence,
-                now,
-                pattern_id,
-            ),
-        )
-        self._sync_pattern_fts(conn, pattern_id)
-        row = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
-        return dict(row)
-
-    def update_pattern(self, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.managed_connection() as conn:
-            return self._overwrite_update_pattern_tx(conn, pattern_id, payload)
 
     def _touch_pattern_tx(self, conn: sqlite3.Connection, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
         now = utc_now_iso()
@@ -1671,18 +1632,6 @@ class IssueMemoryStore:
             )
         return results
 
-    def search_patterns(self, query: str, *, project_scope: str = "", limit: int = 5) -> list[dict[str, Any]]:
-        tokens = tokenize(query, max_tokens=8)
-        safe_tokens = [token.replace(".", "_").replace("/", "_") for token in tokens]
-        fts_query = " OR ".join(safe_tokens[:8])
-        return self.pattern_candidates(
-            fts_query=fts_query,
-            project_scope=project_scope,
-            error_family="generic_runtime_error",
-            root_cause_class="unknown",
-            limit=limit,
-        )
-
     @staticmethod
     def _posterior_mean(alpha: float, beta: float) -> float:
         total = float(alpha) + float(beta)
@@ -2906,6 +2855,7 @@ class IssueMemoryStore:
         variant_id: int,
         success: bool,
         now: str,
+        weight: float = 1.0,
     ) -> dict[str, Any] | None:
         row = conn.execute(
             "SELECT * FROM variant_stats WHERE variant_id = ?",
@@ -2934,12 +2884,12 @@ class IssueMemoryStore:
             prior_alpha=VARIANT_PRIOR_ALPHA,
             prior_beta=VARIANT_PRIOR_BETA,
         )
-        success_delta = 1 if success else 0
-        failure_delta = 0 if success else 1
+        success_delta = weight if success else 0.0
+        failure_delta = 0.0 if success else weight
         alpha_after = decayed_alpha + success_delta
         beta_after = decayed_beta + failure_delta
-        success_count = int(row['success_count']) + success_delta
-        failure_count = int(row['failure_count']) + failure_delta
+        success_count = int(row['success_count']) + (1 if success else 0)
+        failure_count = int(row['failure_count']) + (0 if success else 1)
         conn.execute(
             """
             UPDATE variant_stats
@@ -2983,6 +2933,16 @@ class IssueMemoryStore:
             (retrieval_event_id,),
         ).fetchone()
         if feedback_type not in STRONG_GLOBAL_FEEDBACK:
+            if feedback_type in WEAK_FEEDBACK_WEIGHTS and variant_id is not None:
+                weak_weight = WEAK_FEEDBACK_WEIGHTS[feedback_type]
+                weak_success = feedback_type in WEAK_POSITIVE_FEEDBACK
+                result['variant_stat_update'] = self._update_variant_stat_tx(
+                    conn,
+                    variant_id=variant_id,
+                    success=weak_success,
+                    now=now,
+                    weight=weak_weight,
+                )
             return result
         result['global_update_applied'] = True
         if pattern_id is not None:
@@ -3158,74 +3118,57 @@ class IssueMemoryStore:
                 'negative_applicability_applied': bool(strong_updates.get('negative_applicability_applied', False)),
             }
 
-    def record_feedback(
+    def log_feature_outcomes(
         self,
         *,
-        retrieval_event_id: int,
-        retrieval_candidate_id: int | None,
-        pattern_id: int | None,
-        variant_id: int | None,
-        episode_id: int | None,
+        feedback_event_id: int,
+        retrieval_candidate_id: int,
+        features: dict[str, float],
         feedback_type: str,
         reward: float,
-        actor: str,
-        notes: str,
-    ) -> dict[str, Any]:
-        with self.managed_connection() as conn:
-            cur = conn.execute(
+        error_family: str,
+        project_scope: str,
+    ) -> int:
+        now = utc_now_iso()
+        rows = [
+            (feedback_event_id, retrieval_candidate_id, name, float(value),
+             feedback_type, float(reward), error_family, project_scope, now)
+            for name, value in features.items()
+        ]
+        if not rows:
+            return 0
+        with self.managed_connection(immediate=True) as conn:
+            conn.executemany(
                 """
-                INSERT INTO feedback_events(
-                    retrieval_event_id, retrieval_candidate_id, pattern_id, variant_id,
-                    episode_id, feedback_type, reward, actor, notes, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO feature_outcome_log(
+                    feedback_event_id, retrieval_candidate_id, feature_name, feature_value,
+                    feedback_type, reward, error_family, project_scope, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    retrieval_event_id,
-                    retrieval_candidate_id,
-                    pattern_id,
-                    variant_id,
-                    episode_id,
-                    feedback_type,
-                    float(reward),
-                    actor,
-                    notes,
-                    utc_now_iso(),
-                ),
+                rows,
             )
-            if cur.lastrowid is None:
-                raise RuntimeError("Failed to determine feedback event id after insert")
-            row = conn.execute("SELECT * FROM feedback_events WHERE id = ?", (int(cur.lastrowid),)).fetchone()
-            return dict(row)
+        return len(rows)
+
+    def query_feature_outcome_stats(self) -> list[dict[str, Any]]:
+        with self.managed_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    feature_name,
+                    COUNT(*) AS sample_count,
+                    AVG(feature_value) AS avg_value,
+                    AVG(reward) AS avg_reward,
+                    AVG(CASE WHEN reward > 0 THEN feature_value END) AS avg_positive,
+                    AVG(CASE WHEN reward < 0 THEN feature_value END) AS avg_negative,
+                    SUM(CASE WHEN reward > 0 THEN 1 ELSE 0 END) AS positive_count,
+                    SUM(CASE WHEN reward < 0 THEN 1 ELSE 0 END) AS negative_count
+                FROM feature_outcome_log
+                GROUP BY feature_name
+                ORDER BY sample_count DESC
+                """,
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 1.0) -> float:
         return min(max(float(value), low), high)
-
-    def apply_feedback_update(
-        self,
-        *,
-        pattern_id: int | None,
-        variant_id: int | None,
-        feedback_type: str,
-        reward: float,
-    ) -> dict[str, Any]:
-        if feedback_type not in STRONG_GLOBAL_FEEDBACK:
-            return {}
-        with self.managed_connection(immediate=True) as conn:
-            result = self._apply_strong_feedback_tx(
-                conn,
-                retrieval_event_id=0,
-                pattern_id=pattern_id,
-                variant_id=variant_id,
-                feedback_type=feedback_type,
-                reward=reward,
-                notes='',
-            )
-            return {
-                'pattern': result.get('pattern'),
-                'variant': result.get('variant'),
-                'strategy_stat_updates': result.get('strategy_stat_updates', []),
-                'variant_stat_update': result.get('variant_stat_update'),
-                'global_update_applied': bool(result.get('global_update_applied', False)),
-            }

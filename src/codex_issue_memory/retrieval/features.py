@@ -117,6 +117,7 @@ def _prioritize_reasons(reasons: list[str], *, limit: int = 12) -> list[str]:
         "retrieval-signal",
         "feedback-prior",
         "prior-success",
+        "proven-variant",
     )
     prioritized: list[str] = []
     seen: set[str] = set()
@@ -306,6 +307,13 @@ def build_candidate_features(
     if success_prior_score > 0.55:
         reasons.append("prior-success")
 
+    variant_success = int(variant.get("success_count", 0))
+    variant_reject = int(variant.get("reject_count", 0))
+    times_used = max(int(variant.get("times_used", 0)), int(candidate.get("times_seen", 0)))
+    proven_score = (variant_success + 1) / (times_used + 2) if (variant_success + variant_reject) > 0 else 0.0
+    if proven_score > 0.55:
+        reasons.append("proven-variant")
+
     session_penalty_score = _clamp(float(candidate.get("session_penalty", 0.0)))
     session_boost_score = _clamp(float(candidate.get("session_boost", 0.0)))
     if session_penalty_score > 0:
@@ -334,6 +342,7 @@ def build_candidate_features(
         "recency_score": recency_score,
         "feedback_score": feedback_score,
         "success_prior_score": success_prior_score,
+        "proven_score": proven_score,
         "session_penalty_score": session_penalty_score,
         "session_boost_score": session_boost_score,
     }
