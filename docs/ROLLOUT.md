@@ -56,7 +56,20 @@ Required caller behavior:
 
 Switch `ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE` from `"1"` to `"0"` only after you are satisfied with the current behavior.
 
-Before making that change, check:
+### Pre-promotion readiness checklist
+
+Before moving from shadow mode to live promotions, verify **all** of the following:
+
+- [ ] At least 2 weeks of shadow-mode data collected
+- [ ] Recent metrics look healthy: `issue-memory-maint metrics --window-days 14`
+- [ ] False positive rate is below 10%
+- [ ] Verified conversion rate is above 30%
+- [ ] Pending review queue is manageable (< 20 items)
+- [ ] No unexpected safe overrides appearing
+- [ ] Export a pre-transition dashboard snapshot: `issue-memory-maint export-dashboard --output ~/pre-transition-dashboard.json`
+- [ ] Calibration profile is up to date: `issue-memory-maint calibrate-thresholds`
+
+Before making that change, also check:
 
 - recent metrics look healthy
 - false positives are controlled
@@ -126,3 +139,28 @@ This confirms:
 - benchmark / diagnostics output is structurally stable
 - dashboard snapshots capture current policy and review state
 - conversation-owner reuse is represented as a controlled duplicate signal (`75`) rather than repeated process launches
+
+## Post-transition monitoring
+
+After enabling live promotions (`shadow_mode=0`), monitor these signals during the first 7 days:
+
+1. **False positive rate**: should not increase more than 5% relative to shadow-mode baseline
+2. **Override frequency**: safe overrides should be rare (< 5% of decisions); frequent overrides suggest thresholds need adjustment
+3. **Decision mix**: the ratio of `match` / `ambiguous` / `abstain` should remain stable
+4. **Review queue growth**: a sudden spike in review items may indicate aggressive consolidation
+
+If any signal degrades, return to shadow mode immediately:
+
+```bash
+# In ~/.codex/config.toml, under [mcp_servers.issue_memory.env]:
+ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = "1"
+```
+
+Then investigate with:
+
+```bash
+issue-memory-maint export-dashboard --output ~/post-issue-dashboard.json
+issue-memory-maint review-queue --status pending --limit 50
+```
+
+For the full development plan and planned improvements to the learning pipeline, see [`ROADMAP.md`](ROADMAP.md).

@@ -138,6 +138,24 @@ When updating public docs, verify that:
 - backup and restore guidance matches `src/codex_issue_memory/backup.py`
 - configuration examples still describe the single live `~/.codex/config.toml` MCP entry
 
+## Learning pipeline contributor path
+
+Before modifying retrieval, ranking, learning, or feedback code, read:
+
+1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the "Learning pipeline internals" section documents the posterior model, strategy bandit flow, 23 ranking features, and dense retrieval
+2. [`ROADMAP.md`](ROADMAP.md) — the development plan describes known gaps and planned improvements
+3. Run the relevant benchmarks before and after changes:
+   ```bash
+   python -m codex_issue_memory.maintenance benchmark-real-world
+   python -m codex_issue_memory.maintenance benchmark-hard-negatives
+   python -m codex_issue_memory.maintenance benchmark-dense-bandit
+   ```
+4. Run the full test suite: `python -m pytest`
+5. If you changed ranking weights or thresholds, also run calibration:
+   ```bash
+   python -m codex_issue_memory.maintenance calibrate-thresholds
+   ```
+
 ## PR guidance
 
 Good pull requests are:

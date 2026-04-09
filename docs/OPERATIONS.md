@@ -250,3 +250,29 @@ CRON_SCHEDULE="0 * * * *" bash ~/infra/codex-issue-memory/scripts/install_cron.s
 
 - Move the active database back under `~/.local/share/codex-issue-memory`.
 - Keep Windows or cloud locations for mirrored backups only.
+
+### Owner key not resolving correctly
+
+If `server-status` shows unexpected `owner_key` values or `anonymous` role:
+
+1. Check whether `ISSUE_MEMORY_MAIN_CONVERSATION_KEY` is being injected into the MCP launch environment:
+   ```bash
+   grep 'ISSUE_MEMORY_MAIN_CONVERSATION_KEY' ~/.codex/config.toml
+   ```
+2. If explicit injection is unavailable, confirm `CODEX_THREAD_ID` is present in the child process environment.
+3. Check the resolution chain order: explicit vars → alias vars → `CODEX_THREAD_ID` lineage → parent-process lineage → recent-session inference → synthetic fallback.
+4. If using synthetic fallback (`ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY=1`), expect role `anonymous` and process-scoped keys that do not survive restarts.
+5. Inspect active owner metadata:
+   ```bash
+   issue-memory-maint server-status
+   ```
+   Look for `owner_key`, `owner_key_env`, and `owner_role` in the output.
+
+### Retrieval quality is poor
+
+- Provide a shorter but more meaningful error excerpt — strip boilerplate stack frames.
+- Include `command` and `file_path` alongside `error_text`.
+- Use the correct `project_scope` (repository name, not `"global"`).
+- Check if dense retrieval is enabled: `ISSUE_MEMORY_ENABLE_DENSE_RETRIEVAL`.
+- Run diagnostics: `issue-memory-maint runtime-diagnostics`.
+- Review metrics for recent feedback patterns: `issue-memory-maint metrics --window-days 14`.

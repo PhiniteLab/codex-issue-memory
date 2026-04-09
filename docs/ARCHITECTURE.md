@@ -197,6 +197,60 @@ tables when an older installation is migrated forward. That cleanup is intention
 destructive for the retired learning-state tables only; the active strategy-bandit,
 preference, review, and retrieval data remain intact.
 
+## Learning pipeline internals
+
+The learning subsystem uses hierarchical Bayesian Thompson Sampling to decide how much trust to place in each strategy and variant.
+
+### Posterior model
+
+Each strategy maintains a Beta posterior `(alpha, beta)` updated on feedback:
+- `fix_verified` → strong positive evidence (reward 1.0)
+- `false_positive` → strong negative evidence (reward -1.0)
+- Posteriors decay over time with configurable half-life (`strategy_half_life_days=75`, `variant_half_life_days=35`)
+
+Posteriors exist at three scopes: global, per-repository, and per-user. The strategy bandit samples from the posterior to produce an overlay score.
+
+### Strategy bandit flow
+
+1. **Observation:** For each retrieval candidate, extract the inferred strategy from normalization class hints
+2. **Sample:** Draw a Thompson sample from the strategy's posterior
+3. **Score overlay:** Compute `strategy_overlay = sample × strategy_overlay_scale` and `variant_overlay = variant_sample × variant_overlay_scale`
+4. **Safe override gate:** Before any live promotion, verify the override margin exceeds the safety threshold and minimum evidence is met
+5. **Shadow mode:** When shadow mode is enabled (default), overlays are logged but not applied to live rankings
+
+### Ranking feature set
+
+`HeuristicRanker` computes 23 weighted features per candidate:
+
+| Feature group | Features | Impact |
+|---|---|---|
+| Scope alignment | `scope_match`, `user_scope_match` | High — filters repo-specific vs global |
+| Family/class alignment | `family_match`, `root_cause_class_match`, `class_hint_match` | High — ensures semantic match |
+| Lexical similarity | `lexical_score` | High — FTS-based overlap |
+| Dense similarity | `dense_score` | Medium — n-gram hash embedding |
+| Fingerprint matching | `command_match`, `path_match`, `env_match`, `stack_match`, `repo_match` | Medium — contextual signals |
+| Feedback history | `feedback_bonus`, `variant_feedback_bonus`, `feedback_penalty` | High — learning from outcomes |
+| Session memory | `session_penalty` | Medium — recent rejection dampening |
+| Support evidence | `support_score` | Low (currently underweighted at 0.02) |
+| Entity overlap | `entity_overlap`, `entity_conflict_penalty` | Medium — structural match |
+
+### Dense retrieval
+
+The optional dense retrieval subsystem uses character n-gram hashing (not neural embeddings) to produce fixed-dimension vectors (`ISSUE_MEMORY_DENSE_EMBEDDING_DIM=192`). This provides a lightweight semantic similarity signal without external model dependencies.
+
+Dense candidates are merged with lexical FTS candidates before ranking.
+
+### Known learning gaps
+
+These are documented limitations being addressed in the [roadmap](ROADMAP.md):
+
+1. **Incomplete feedback routing:** `candidate_accepted` and `candidate_rejected` update session memory but do not update variant success/reject statistics
+2. **Static ranking weights:** The 23 feature weights are fixed defaults; no automatic calibration from feedback data
+3. **Single-factor posteriors:** Each strategy tracks only one success/trial dimension — no separate quality, safety, and adoption factors
+4. **Uniform thresholds:** `match_accept_threshold`, `match_weak_threshold`, and `ambiguity_margin` are the same across all error families
+5. **No implicit feedback:** Silent rejections (user ignores a suggestion) are not captured
+6. **No cross-session learning:** A pattern rejected in session A may be re-suggested in session B
+
 ## Runtime path model
 
 `Settings.from_env()` is the runtime source of truth for filesystem paths and operational flags.

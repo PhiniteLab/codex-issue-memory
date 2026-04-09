@@ -328,6 +328,7 @@ grep -n 'ISSUE_MEMORY_MAX_MCP_INSTANCES = "0"' ~/.codex/config.toml
   - [`docs/ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](docs/ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md)
   - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
   - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+  - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Documentation map
 

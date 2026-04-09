@@ -64,6 +64,16 @@ Good inputs:
 - the correct `project_scope`
 - a stable `session_id` if you want session-local reranking
 
+### `session_id` behavior
+
+Pass a stable `session_id` to enable session-local memory:
+
+- the system remembers which candidates were accepted or rejected within the session
+- rejected candidates receive a penalty on subsequent queries in the same session
+- this prevents the same wrong suggestion from appearing repeatedly during one debugging flow
+- do not change `session_id` mid-session — this resets session-local reranking
+- session memory expires after the configured TTL (`ISSUE_MEMORY_SESSION_TTL_SECONDS`, default 6 hours)
+
 Example:
 
 ```python
@@ -91,6 +101,18 @@ Decision meanings:
 - `match`: one candidate is clearly ahead
 - `ambiguous`: compare the top one or two candidates with `issue_get`
 - `abstain`: continue fresh debugging
+
+### How retrieval works internally
+
+`issue_match` uses a multi-source retrieval pipeline:
+
+1. **Lexical retrieval**: SQLite FTS5 full-text search over stored patterns and variants
+2. **Variant-aware retrieval**: fingerprint matching on commands, paths, stacks, repos, and environments
+3. **Dense retrieval** (when enabled): character n-gram hash embeddings produce a lightweight semantic similarity signal without external model dependencies
+4. **Ranking**: all candidates are scored using 23 weighted features covering scope, family, similarity, feedback history, and session memory
+5. **Decision**: the ranker output is converted to `match` / `ambiguous` / `abstain` based on configured thresholds
+
+When the strategy bandit is enabled, an optional overlay score from Thompson Sampling is applied (or logged in shadow mode) before the final decision.
 
 ## Inspecting stored memory
 
@@ -155,7 +177,7 @@ Internally, the write path stores a pattern, a context-specific variant, and an 
 
 ## Submitting feedback
 
-Use `issue_feedback` after trying a candidate.
+Use `issue_feedback` after trying a candidate. **Always provide feedback** — this is how the system learns and improves future retrieval quality.
 
 ```python
 feedback = app.issue_feedback(

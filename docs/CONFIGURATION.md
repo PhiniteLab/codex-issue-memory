@@ -270,6 +270,32 @@ If you still want a bounded total-process ceiling for a specific deployment, you
 | `ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS` | `4000` | Max stored chars from verification output |
 | `ISSUE_MEMORY_NOTE_MAX_CHARS` | `2000` | Max stored chars from notes |
 
+### Calibration profile
+
+When `ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE` is enabled, the runtime loads a saved calibration profile from `ISSUE_MEMORY_CALIBRATION_PROFILE_PATH` (default: `ISSUE_MEMORY_STATE_DIR/calibration_profile.json`).
+
+The calibration profile stores threshold overrides computed by the `calibrate-thresholds` maintenance command. It can contain:
+
+- error-family-specific accept/weak thresholds
+- adjusted ambiguity margins
+- strategy overlay tuning parameters
+
+To generate or update a calibration profile:
+
+```bash
+issue-memory-maint calibrate-thresholds
+```
+
+The runtime applies calibration data at startup. If the profile file does not exist, the runtime uses the default thresholds from environment variables.
+
+To inspect the current calibration state:
+
+```bash
+issue-memory-maint metrics --window-days 14
+```
+
+The metrics output includes a `calibration_profile` section showing whether a profile is loaded and its key overrides.
+
 ## Recommended public default
 
 The current recommended default configuration is:
