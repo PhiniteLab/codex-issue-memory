@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import blake2b
+import logging
 import math
 import struct
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 from ..models import QueryProfile
 from ..normalization import tokenize
 from ..storage import IssueMemoryStore
+
+_logger = logging.getLogger(__name__)
 
 
 class DenseEmbeddingIndex:
@@ -61,6 +64,10 @@ class DenseEmbeddingIndex:
         try:
             values = list(struct.unpack(f"<{expected_dim}f", blob))
         except struct.error:
+            _logger.warning(
+                "Corrupt embedding blob: expected %d floats (%d bytes), got %d bytes",
+                expected_dim, expected_dim * 4, len(blob),
+            )
             return [0.0] * expected_dim
         return [float(value) for value in values]
 

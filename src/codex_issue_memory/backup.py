@@ -43,7 +43,14 @@ class BackupManager:
         return sqlite_path.with_suffix(".json")
 
     def _hash_file(self, path: Path) -> str:
-        return sha256(path.read_bytes()).hexdigest()
+        hasher = sha256()
+        with open(path, "rb") as fh:
+            while True:
+                chunk = fh.read(1 << 20)  # 1 MiB chunks
+                if not chunk:
+                    break
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
     def _load_manifest(self, sqlite_path: Path) -> dict[str, Any] | None:
         manifest_path = self._manifest_path(sqlite_path)

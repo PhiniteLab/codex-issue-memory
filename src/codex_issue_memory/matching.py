@@ -19,7 +19,6 @@ class IssueMatcher:
         self.retriever = CandidateRetriever(store)
         self.ranker = HeuristicRanker(store, self.settings)
         self.calibration_profile = self.store.load_calibration_profile() if self.settings.enable_calibration_profile else {}
-        self.decision_policy = self._decision_policy_for_family("")
 
     def _threshold_bundle(self, error_family: str) -> dict[str, float]:
         bundle = {

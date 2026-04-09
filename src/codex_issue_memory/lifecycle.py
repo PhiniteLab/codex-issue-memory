@@ -195,6 +195,7 @@ class MCPServerLifecycle:
 
     def _try_acquire_slot(self, slot: int) -> bool:
         handle = self._open_lock_handle(self._slot_lock_path(slot))
+        acquired = False
         try:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -202,24 +203,30 @@ class MCPServerLifecycle:
                 try:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
                 except OSError:
-                    handle.close()
                     return False
             else:  # pragma: no cover - unknown platform
-                handle.close()
+                acquired = True
+                self._lock_handle = handle
+                self._acquired = True
+                self._slot = slot
                 return True
+            acquired = True
+            self._lock_handle = handle
+            self._acquired = True
+            self._slot = slot
+            return True
         except OSError:
-            handle.close()
             return False
-        self._lock_handle = handle
-        self._acquired = True
-        self._slot = slot
-        return True
+        finally:
+            if not acquired:
+                handle.close()
 
     def _try_acquire_owner_key(self) -> bool:
         owner_key = self.settings.server_owner_key
         if not owner_key:
             return True
         handle = self._open_lock_handle(self._owner_lock_path(owner_key))
+        acquired = False
         try:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -227,21 +234,25 @@ class MCPServerLifecycle:
                 try:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
                 except OSError:
-                    handle.close()
                     return False
             else:  # pragma: no cover - unknown platform
-                handle.close()
+                acquired = True
+                self._owner_lock_handle = handle
                 return True
+            acquired = True
+            self._owner_lock_handle = handle
+            return True
         except OSError:
-            handle.close()
             return False
-        self._owner_lock_handle = handle
-        return True
+        finally:
+            if not acquired:
+                handle.close()
 
     def _try_acquire_parent_lock(self) -> bool:
         if not self.settings.server_enforce_parent_singleton:
             return True
         handle = self._open_lock_handle(self._parent_lock_path())
+        acquired = False
         try:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -249,16 +260,19 @@ class MCPServerLifecycle:
                 try:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
                 except OSError:
-                    handle.close()
                     return False
             else:  # pragma: no cover - unknown platform
-                handle.close()
+                acquired = True
+                self._parent_lock_handle = handle
                 return True
+            acquired = True
+            self._parent_lock_handle = handle
+            return True
         except OSError:
-            handle.close()
             return False
-        self._parent_lock_handle = handle
-        return True
+        finally:
+            if not acquired:
+                handle.close()
 
     def _release_lock_handle(self, handle: Any | None) -> None:
         if handle is None:
@@ -383,6 +397,8 @@ class MCPServerLifecycle:
             _thread.interrupt_main()
         except RuntimeError:
             pass
+        # All signal methods exhausted — force hard exit to prevent zombie process
+        sys.exit(1)
 
     def _start_monitor(self) -> None:
         if self._monitor_thread is not None and self._monitor_thread.is_alive():
@@ -634,7 +650,9 @@ class MCPServerLifecycle:
             return
         self._monitor_stop.set()
         if self._monitor_thread is not None and self._monitor_thread is not threading.current_thread():
-            self._monitor_thread.join(timeout=0.5)
+            self._monitor_thread.join(timeout=5.0)
+            if self._monitor_thread.is_alive():
+                print("issue-memory: monitor thread did not exit within timeout", file=sys.stderr)
         note = self._shutdown_reason or "server-stopped"
         try:
             self._write_slot_status(running=False, note=note)

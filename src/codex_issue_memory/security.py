@@ -100,8 +100,3 @@ def sanitize_json_text(text: str, *, enabled: bool = True, max_chars: int = 0) -
     redacted = _redact_value(payload)
     return _truncate_text(json.dumps(redacted, ensure_ascii=False, sort_keys=True), max_chars=max_chars)
 
-
-def sanitize_mapping(value: dict[str, Any], *, enabled: bool = True) -> dict[str, Any]:
-    if not enabled:
-        return dict(value)
-    return _redact_value(dict(value))

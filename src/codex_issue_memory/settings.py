@@ -48,7 +48,6 @@ class Settings:
     resolved_review_retention_days: int
     enable_redaction: bool
     enable_calibration_profile: bool
-    enforce_single_mcp_instance: bool
     max_mcp_instances: int | None
     server_lock_dir: Path
     server_duplicate_exit_code: int
@@ -211,7 +210,6 @@ class Settings:
             resolved_review_retention_days=max(int(os.environ.get("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", "120")), 1),
             enable_redaction=os.environ.get("ISSUE_MEMORY_ENABLE_REDACTION", "1").strip().lower() not in {"0", "false", "no"},
             enable_calibration_profile=os.environ.get("ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE", "1").strip().lower() not in {"0", "false", "no"},
-            enforce_single_mcp_instance=compat_single_cap,
             max_mcp_instances=max_mcp_instances,
             server_lock_dir=server_lock_dir,
             server_duplicate_exit_code=duplicate_exit_code,

@@ -7,7 +7,7 @@ from typing import Any
 
 from .text import normalize_text, tokenize
 
-_DIGEST_LEN = 16
+_DIGEST_LEN = 32
 
 
 def _stable_digest(*parts: str) -> str:
