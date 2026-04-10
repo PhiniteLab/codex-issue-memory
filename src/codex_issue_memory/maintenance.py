@@ -301,6 +301,22 @@ def cmd_doctor(mode: str, max_instances: int, codex_home: str | None) -> None:
     else:
         checks.append(_check("backup-freshness", False, "no backups found", severity="warning"))
 
+    # 5.3: FP rate degradation alarm
+    try:
+        store = IssueMemoryStore.from_env()
+        store.initialize()
+        metrics = store.metrics_summary(window_days=30)
+        fp_rate = float(metrics.get("feedback", {}).get("false_positive_rate", 0.0))
+        fp_threshold = float(settings.fp_rate_alarm_threshold)
+        checks.append(_check(
+            "fp-rate-alarm",
+            fp_rate < fp_threshold,
+            f"fp_rate={fp_rate:.4f}, threshold={fp_threshold:.2f}",
+            severity="warning",
+        ))
+    except Exception:
+        checks.append(_check("fp-rate-alarm", True, "unable to compute FP rate (no data)", severity="warning"))
+
     error_count = sum(1 for item in checks if not item["ok"] and item["severity"] == "error")
     warning_count = sum(1 for item in checks if not item["ok"] and item["severity"] != "error")
     status = "ok" if error_count == 0 and warning_count == 0 else ("warn" if error_count == 0 else "fail")

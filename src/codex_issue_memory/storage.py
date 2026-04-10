@@ -1102,7 +1102,7 @@ class IssueMemoryStore:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=window)).replace(microsecond=0).isoformat()
         with self.managed_connection() as conn:
             retrieval_rows = conn.execute(
-                "SELECT retrieval_mode, decision_status, latency_ms FROM retrieval_events WHERE created_at >= ?",
+                "SELECT retrieval_mode, decision_status, latency_ms, retrieval_latency_ms, ranking_latency_ms, bandit_latency_ms, decision_latency_ms FROM retrieval_events WHERE created_at >= ?",
                 (cutoff,),
             ).fetchall()
             feedback_rows = conn.execute(
@@ -1132,18 +1132,78 @@ class IssueMemoryStore:
             archived_variants = int(conn.execute("SELECT COUNT(*) AS count FROM issue_variants WHERE status = 'archived'").fetchone()["count"])
             total_patterns = int(conn.execute("SELECT COUNT(*) AS count FROM issue_patterns").fetchone()["count"])
             total_variants = int(conn.execute("SELECT COUNT(*) AS count FROM issue_variants").fetchone()["count"])
+            # 5.1: Strategy-level metrics
+            strategy_rows = conn.execute(
+                """
+                SELECT ss.strategy_key,
+                       ss.success_count,
+                       ss.failure_count,
+                       ss.alpha,
+                       ss.beta
+                FROM strategy_stats ss
+                WHERE ss.scope_type = 'global'
+                ORDER BY (ss.success_count + ss.failure_count) DESC
+                LIMIT 100
+                """,
+            ).fetchall()
+            strategy_feedback_rows = conn.execute(
+                """
+                SELECT iv.strategy_key,
+                       fe.feedback_type,
+                       COUNT(*) AS cnt
+                FROM feedback_events fe
+                JOIN retrieval_candidates rc ON rc.id = fe.retrieval_candidate_id
+                JOIN issue_variants iv ON iv.id = rc.variant_id
+                WHERE fe.created_at >= ? AND iv.strategy_key != ''
+                GROUP BY iv.strategy_key, fe.feedback_type
+                """,
+                (cutoff,),
+            ).fetchall()
         decision_counts: dict[str, int] = {"match": 0, "ambiguous": 0, "abstain": 0}
         mode_counts: dict[str, int] = {}
         latencies: list[int] = []
+        stage_latencies: dict[str, list[int]] = {
+            "retrieval": [], "ranking": [], "bandit": [], "decision": [],
+        }
         for row in retrieval_rows:
             mode = str(row["retrieval_mode"])
             mode_counts[mode] = mode_counts.get(mode, 0) + 1
             status = str(row["decision_status"])
             decision_counts[status] = decision_counts.get(status, 0) + 1
             latencies.append(int(row["latency_ms"] or 0))
+            stage_latencies["retrieval"].append(int(row["retrieval_latency_ms"] or 0))
+            stage_latencies["ranking"].append(int(row["ranking_latency_ms"] or 0))
+            stage_latencies["bandit"].append(int(row["bandit_latency_ms"] or 0))
+            stage_latencies["decision"].append(int(row["decision_latency_ms"] or 0))
         feedback_counts = {str(row["feedback_type"]): int(row["count"]) for row in feedback_rows}
         feedback_event_counts = {str(row["feedback_type"]): int(row["retrieval_event_count"]) for row in feedback_rows}
         visible_match_events = max(decision_counts.get("match", 0) + decision_counts.get("ambiguous", 0), 1)
+        # 5.1: Build per-strategy metrics
+        strategy_fb: dict[str, dict[str, int]] = {}
+        for row in strategy_feedback_rows:
+            key = str(row["strategy_key"])
+            fb_type = str(row["feedback_type"])
+            strategy_fb.setdefault(key, {})[fb_type] = int(row["cnt"])
+        strategy_metrics: dict[str, dict[str, Any]] = {}
+        for row in strategy_rows:
+            key = str(row["strategy_key"])
+            total = int(row["success_count"]) + int(row["failure_count"])
+            fb = strategy_fb.get(key, {})
+            suggestions = sum(fb.values())
+            accepted = fb.get("candidate_accepted", 0) + fb.get("fix_verified", 0)
+            fp_count = fb.get("false_positive", 0)
+            rewards = (
+                accepted * 1.0
+                + fb.get("candidate_rejected", 0) * (-0.6)
+                + fp_count * (-2.5)
+            )
+            strategy_metrics[key] = {
+                "suggestions": total,
+                "suggestions_in_window": suggestions,
+                "accepted": accepted,
+                "fp_rate": round(fp_count / max(suggestions, 1), 6),
+                "mean_reward": round(rewards / max(suggestions, 1), 6),
+            }
         backup_files = sorted(self.settings.backup_dir.glob("issue_memory_*.sqlite3"), key=lambda item: item.stat().st_mtime, reverse=True)
         latest_backup = backup_files[0] if backup_files else None
         latest_backup_age_hours = None
@@ -1176,6 +1236,13 @@ class IssueMemoryStore:
                     "p95": round(self._percentile(latencies, 0.95), 3),
                     "p99": round(self._percentile(latencies, 0.99), 3),
                 },
+                "stage_latency_ms": {
+                    stage: {
+                        "p50": round(self._percentile(values, 0.50), 3),
+                        "p95": round(self._percentile(values, 0.95), 3),
+                    }
+                    for stage, values in stage_latencies.items()
+                },
                 "safe_override_count": safe_override_count,
                 "safe_override_rate": round(safe_override_count / visible_match_events, 6),
                 "shadow_promote_count": shadow_promote_count,
@@ -1186,7 +1253,9 @@ class IssueMemoryStore:
                 "counts": feedback_counts,
                 "verified_fix_conversion_rate": round(feedback_event_counts.get('fix_verified', 0) / visible_match_events, 6),
                 "false_positive_rate": round(feedback_event_counts.get('false_positive', 0) / visible_match_events, 6),
+                "fp_alarm": round(feedback_event_counts.get('false_positive', 0) / visible_match_events, 6) >= self.settings.fp_rate_alarm_threshold,
             },
+            "strategy": strategy_metrics,
             "review_queue": {
                 "pending": pending_reviews,
             },
@@ -2786,6 +2855,7 @@ class IssueMemoryStore:
         repo_name: str,
         retrieval_mode: str,
         latency_ms: int,
+        stage_latency: dict[str, int] | None = None,
         experiment_id: str = "",
         experiment_arm: str = "",
     ) -> dict[str, Any]:
@@ -2809,10 +2879,11 @@ class IssueMemoryStore:
                     root_cause_class, exception_types_json, entity_slots_json, strategy_hints_json,
                     user_scope, env_fingerprint, retrieval_mode, decision_status, decision_confidence,
                     abstain_reason, selected_pattern_id, selected_variant_id, selected_candidate_rank,
-                    latency_ms, token_cost_estimate, created_at,
+                    latency_ms, retrieval_latency_ms, ranking_latency_ms, bandit_latency_ms, decision_latency_ms,
+                    token_cost_estimate, created_at,
                     experiment_id, experiment_arm
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     request_uuid,
@@ -2839,6 +2910,10 @@ class IssueMemoryStore:
                     selected_variant_id,
                     1 if top_candidate is not None else None,
                     int(latency_ms),
+                    int((stage_latency or {}).get("retrieval_latency_ms", 0)),
+                    int((stage_latency or {}).get("ranking_latency_ms", 0)),
+                    int((stage_latency or {}).get("bandit_latency_ms", 0)),
+                    int((stage_latency or {}).get("decision_latency_ms", 0)),
                     0,
                     now,
                     experiment_id,
@@ -3777,6 +3852,71 @@ class IssueMemoryStore:
                         "UPDATE entity_importance SET importance_weight = ?, updated_at = ? WHERE entity_key = ? AND error_family = ?",
                         (round(weight, 4), now, entity_key, error_family),
                     )
+
+    # ── Phase 5.4: Batch learning safety gate ──────────────────────────
+
+    def enqueue_feedback_batch(
+        self,
+        *,
+        retrieval_event_id: int,
+        retrieval_candidate_id: int | None,
+        pattern_id: int | None,
+        variant_id: int | None,
+        feedback_type: str,
+        reward: float,
+        actor: str,
+        notes: str,
+    ) -> dict[str, Any]:
+        now = utc_now_iso()
+        with self.managed_connection(immediate=True) as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO feedback_batch_queue(
+                    retrieval_event_id, retrieval_candidate_id, pattern_id, variant_id,
+                    feedback_type, reward, actor, notes, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    retrieval_event_id,
+                    retrieval_candidate_id,
+                    pattern_id,
+                    variant_id,
+                    feedback_type,
+                    float(reward),
+                    actor,
+                    notes,
+                    now,
+                ),
+            )
+            return {"queued_id": cur.lastrowid, "status": "batched"}
+
+    def count_recent_fp_for_pattern(self, pattern_id: int, window_seconds: int) -> int:
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max(window_seconds, 1))).replace(microsecond=0).isoformat()
+        with self.managed_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS cnt FROM feedback_events
+                WHERE pattern_id = ? AND feedback_type = 'false_positive' AND created_at >= ?
+                """,
+                (pattern_id, cutoff),
+            ).fetchone()
+            return int(row["cnt"]) if row else 0
+
+    def flush_feedback_batch(self) -> list[dict[str, Any]]:
+        """Apply all pending batched feedback items and return their IDs."""
+        with self.managed_connection(immediate=True) as conn:
+            rows = conn.execute(
+                "SELECT * FROM feedback_batch_queue WHERE status = 'pending' ORDER BY created_at",
+            ).fetchall()
+            results: list[dict[str, Any]] = []
+            now = utc_now_iso()
+            for row in rows:
+                conn.execute(
+                    "UPDATE feedback_batch_queue SET status = 'applied', applied_at = ? WHERE id = ?",
+                    (now, int(row["id"])),
+                )
+                results.append({"id": int(row["id"]), "feedback_type": str(row["feedback_type"])})
+            return results
 
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 1.0) -> float:

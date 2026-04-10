@@ -73,12 +73,47 @@ class FeedbackService:
             )
 
         applied_reward = DEFAULT_REWARDS.get(feedback_type, 0.0) if reward is None else float(reward)
+
+        # Phase 5.4: Batch learning safety gate — excessive FP on same pattern
+        resolved_pattern_id = int(candidate["pattern_id"]) if candidate.get("pattern_id") is not None else None
+        batch_window = self.store.settings.feedback_batch_window_seconds
+        fp_threshold = self.store.settings.feedback_batch_fp_review_threshold
+        if (
+            feedback_type == "false_positive"
+            and resolved_pattern_id is not None
+            and batch_window > 0
+            and self.store.count_recent_fp_for_pattern(resolved_pattern_id, batch_window) >= fp_threshold
+        ):
+            batch_result = self.store.enqueue_feedback_batch(
+                retrieval_event_id=retrieval_event_id,
+                retrieval_candidate_id=int(candidate["id"]),
+                pattern_id=resolved_pattern_id,
+                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                feedback_type=feedback_type,
+                reward=applied_reward,
+                actor=actor,
+                notes=notes,
+            )
+            return {
+                "status": "batched",
+                "retrieval_event_id": retrieval_event_id,
+                "retrieval_candidate_id": int(candidate["id"]),
+                "feedback_type": feedback_type,
+                "reward": applied_reward,
+                "batch_gate": batch_result,
+                "resolved_candidate": {
+                    "candidate_rank": int(candidate["candidate_rank"]),
+                    "pattern_id": resolved_pattern_id,
+                    "variant_id": int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                },
+            }
+
         # Mark the retrieval event as having received feedback (Phase 2.1)
         self.store.mark_retrieval_has_feedback(retrieval_event_id)
         feedback_result = self.store.submit_feedback(
             retrieval_event_id=retrieval_event_id,
             retrieval_candidate_id=int(candidate["id"]),
-            pattern_id=int(candidate["pattern_id"]) if candidate.get("pattern_id") is not None else None,
+            pattern_id=resolved_pattern_id,
             variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
             episode_id=None,
             feedback_type=feedback_type,

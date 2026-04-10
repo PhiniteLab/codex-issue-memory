@@ -59,6 +59,27 @@ class IssueMatcher:
         repo_name: str = "",
         retrieval_context: str = "match",
     ) -> list[RankedCandidate]:
+        ranked, _latency = self._ranked_candidates_timed(
+            profile,
+            project_scope=project_scope,
+            limit=limit,
+            session_id=session_id,
+            repo_name=repo_name,
+            retrieval_context=retrieval_context,
+        )
+        return ranked
+
+    def _ranked_candidates_timed(
+        self,
+        profile: QueryProfile,
+        *,
+        project_scope: str,
+        limit: int,
+        session_id: str = "",
+        repo_name: str = "",
+        retrieval_context: str = "match",
+    ) -> tuple[list[RankedCandidate], dict[str, int]]:
+        t0 = time.perf_counter()
         raw_candidates = self.retriever.retrieve(
             profile,
             project_scope=project_scope,
@@ -66,13 +87,20 @@ class IssueMatcher:
             session_id=session_id,
             repo_name=repo_name or getattr(profile, "repo_name", ""),
         )
-        return self.ranker.rank(
+        t1 = time.perf_counter()
+        ranked = self.ranker.rank(
             profile,
             raw_candidates,
             project_scope=project_scope,
             limit=max(limit * 3, 8),
             use_strategy_overlay=retrieval_context == "match",
         )
+        t2 = time.perf_counter()
+        latency = {
+            "retrieval_latency_ms": int((t1 - t0) * 1000),
+            "ranking_latency_ms": int((t2 - t1) * 1000),
+        }
+        return ranked, latency
 
     def match_with_decision(
         self,
@@ -88,7 +116,7 @@ class IssueMatcher:
         experiment_arm: str = "",
     ) -> tuple[list[MatchResult], MatchDecision, dict[str, Any]]:
         start = time.perf_counter()
-        ranked = self.ranked_candidates(
+        ranked, stage_latency = self._ranked_candidates_timed(
             profile,
             project_scope=project_scope,
             limit=limit,
@@ -96,7 +124,9 @@ class IssueMatcher:
             repo_name=repo_name,
             retrieval_context=retrieval_mode,
         )
+        t_decision_start = time.perf_counter()
         decision = self._decision_policy_for_family(profile.error_family).decide(ranked)
+        stage_latency["decision_latency_ms"] = int((time.perf_counter() - t_decision_start) * 1000)
         visible_ranked = [] if decision.status == "abstain" else ranked[:limit]
         visible_matches = [self._to_match_result(item) for item in visible_ranked]
         latency_ms = int((time.perf_counter() - start) * 1000)
@@ -112,6 +142,7 @@ class IssueMatcher:
                 repo_name=repo_name,
                 retrieval_mode=retrieval_mode,
                 latency_ms=latency_ms,
+                stage_latency=stage_latency,
                 experiment_id=experiment_id,
                 experiment_arm=experiment_arm,
             ))

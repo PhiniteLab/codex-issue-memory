@@ -62,6 +62,9 @@ class Settings:
     server_enforce_parent_singleton: bool
     server_parent_instance_idle_timeout_seconds: int
     server_parent_instance_monitor_interval_seconds: float
+    fp_rate_alarm_threshold: float
+    feedback_batch_window_seconds: int
+    feedback_batch_fp_review_threshold: int
     env_json_max_chars: int
     verification_output_max_chars: int
     note_max_chars: int
@@ -228,6 +231,9 @@ class Settings:
             server_owner_key=owner_key,
             server_owner_key_env=owner_key_env,
             server_owner_role=owner_role,
+            fp_rate_alarm_threshold=max(float(os.environ.get("ISSUE_MEMORY_FP_RATE_ALARM_THRESHOLD", "0.15")), 0.01),
+            feedback_batch_window_seconds=max(int(os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS", "300")), 0),
+            feedback_batch_fp_review_threshold=max(int(os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD", "5")), 2),
             env_json_max_chars=max(int(os.environ.get("ISSUE_MEMORY_ENV_JSON_MAX_CHARS", "4000")), 256),
             verification_output_max_chars=max(int(os.environ.get("ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS", "4000")), 256),
             note_max_chars=max(int(os.environ.get("ISSUE_MEMORY_NOTE_MAX_CHARS", "2000")), 128),
