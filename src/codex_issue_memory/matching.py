@@ -84,6 +84,8 @@ class IssueMatcher:
         repo_name: str = "",
         retrieval_mode: str = "match",
         log_event: bool = True,
+        experiment_id: str = "",
+        experiment_arm: str = "",
     ) -> tuple[list[MatchResult], MatchDecision, dict[str, Any]]:
         start = time.perf_counter()
         ranked = self.ranked_candidates(
@@ -110,6 +112,8 @@ class IssueMatcher:
                 repo_name=repo_name,
                 retrieval_mode=retrieval_mode,
                 latency_ms=latency_ms,
+                experiment_id=experiment_id,
+                experiment_arm=experiment_arm,
             ))
             ids_by_rank = {
                 int(rank): int(candidate_id)

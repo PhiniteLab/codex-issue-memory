@@ -631,6 +631,84 @@ def cmd_sweep_implicit(timeout_minutes: int | None, limit: int) -> None:
     print(json.dumps({"status": "ok", "swept": len(results), "events": results}, indent=2, default=str))
 
 
+# ------------------------------------------------------------------
+# Phase 3.3 — A/B experiment commands
+# ------------------------------------------------------------------
+
+def cmd_create_experiment(
+    *,
+    experiment_id: str,
+    name: str,
+    description: str,
+    traffic_fraction: float,
+) -> None:
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    result = store.create_experiment(
+        experiment_id=experiment_id,
+        name=name,
+        description=description,
+        traffic_fraction=traffic_fraction,
+    )
+    print(json.dumps(result, indent=2))
+
+
+def cmd_update_experiment(experiment_id: str, status: str) -> None:
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    result = store.update_experiment_status(experiment_id, status)
+    print(json.dumps(result, indent=2))
+
+
+def cmd_analyze_experiment(experiment_id: str) -> None:
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    result = store.analyze_experiment(experiment_id)
+    print(json.dumps(result, indent=2))
+
+
+# ------------------------------------------------------------------
+# Phase 3.4 — Auto weight calibration
+# ------------------------------------------------------------------
+
+def cmd_calibrate_weights(*, error_family: str = "", write_profile: bool = False) -> None:
+    """Calibrate ranking weights from feature_outcome_log data."""
+    from .learning.weight_calibration import compute_optimal_weights
+    from .retrieval.ranker import HeuristicRanker
+
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    matrix = store.query_feature_outcome_matrix(error_family=error_family)
+    if matrix.get("skipped"):
+        print(json.dumps({"status": "skipped", "reason": matrix.get("reason", "insufficient data")}, indent=2))
+        return
+
+    result = compute_optimal_weights(
+        samples=matrix["samples"],
+        feature_names=matrix["feature_names"],
+        base_weights=dict(HeuristicRanker.DEFAULT_WEIGHTS),
+    )
+    result["status"] = "ok"
+    if error_family:
+        result["error_family"] = error_family
+
+    if write_profile and result.get("weight_overrides"):
+        from datetime import timezone
+        profile = store.load_calibration_profile() or {}
+        profile.setdefault("version", 1)
+        profile["generated_at"] = datetime.now(tz=timezone.utc).isoformat()
+        overrides = profile.setdefault("weight_overrides", {})
+        family_key = error_family or "__global__"
+        overrides[family_key] = result["weight_overrides"]
+        store.settings.calibration_profile_path.write_text(
+            json.dumps(profile, indent=2, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        result["calibration_profile_path"] = str(store.settings.calibration_profile_path)
+
+    print(json.dumps(result, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Maintenance commands for codex issue memory.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -690,6 +768,21 @@ def build_parser() -> argparse.ArgumentParser:
     sweep_impl = subparsers.add_parser("sweep-implicit")
     sweep_impl.add_argument("--timeout-minutes", type=int, default=None)
     sweep_impl.add_argument("--limit", type=int, default=500)
+    # Phase 3.3 — A/B experiment commands
+    create_exp = subparsers.add_parser("create-experiment")
+    create_exp.add_argument("--id", required=True, dest="experiment_id")
+    create_exp.add_argument("--name", required=True)
+    create_exp.add_argument("--description", default="")
+    create_exp.add_argument("--traffic-fraction", type=float, default=0.5)
+    update_exp = subparsers.add_parser("update-experiment")
+    update_exp.add_argument("experiment_id")
+    update_exp.add_argument("status", choices=("draft", "running", "paused", "completed", "cancelled"))
+    analyze_exp = subparsers.add_parser("analyze-experiment")
+    analyze_exp.add_argument("experiment_id")
+    # Phase 3.4 — Auto weight calibration
+    cal_weights = subparsers.add_parser("calibrate-weights")
+    cal_weights.add_argument("--error-family", default="")
+    cal_weights.add_argument("--write-profile", action="store_true")
     return parser
 
 
@@ -753,6 +846,19 @@ def main() -> None:
         cmd_analyze_feature_importance()
     elif args.command == "sweep-implicit":
         cmd_sweep_implicit(timeout_minutes=args.timeout_minutes, limit=args.limit)
+    elif args.command == "create-experiment":
+        cmd_create_experiment(
+            experiment_id=args.experiment_id,
+            name=args.name,
+            description=args.description,
+            traffic_fraction=args.traffic_fraction,
+        )
+    elif args.command == "update-experiment":
+        cmd_update_experiment(args.experiment_id, args.status)
+    elif args.command == "analyze-experiment":
+        cmd_analyze_experiment(args.experiment_id)
+    elif args.command == "calibrate-weights":
+        cmd_calibrate_weights(error_family=args.error_family, write_profile=bool(args.write_profile))
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 

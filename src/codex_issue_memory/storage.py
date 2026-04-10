@@ -1672,6 +1672,13 @@ class IssueMemoryStore:
         data['failure_count'] = int(data.get('failure_count', 0))
         data['posterior_mean'] = self._posterior_mean(alpha, beta)
         data['effective_observations'] = max(alpha + beta - STRATEGY_PRIOR_ALPHA - STRATEGY_PRIOR_BETA, 0.0)
+        # Multi-factor posteriors (Phase 3.1)
+        for factor in ('quality', 'safety', 'adoption'):
+            fa = float(data.get(f'{factor}_alpha', STRATEGY_PRIOR_ALPHA))
+            fb = float(data.get(f'{factor}_beta', STRATEGY_PRIOR_BETA))
+            data[f'{factor}_alpha'] = fa
+            data[f'{factor}_beta'] = fb
+            data[f'{factor}_mean'] = self._posterior_mean(fa, fb)
         return data
 
     def _decode_variant_stat_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -1749,6 +1756,228 @@ class IssueMemoryStore:
                     for row in rows
                 }
         return result
+
+    def load_family_stats(self, family_keys: list[str]) -> dict[str, dict[str, Any]]:
+        """Load strategy_families rows for the given family keys (Phase 3.2)."""
+        if not family_keys:
+            return {}
+        normalized = list(dict.fromkeys(k.strip() for k in family_keys if k.strip()))
+        if not normalized:
+            return {}
+        placeholders = ", ".join(["?"] * len(normalized))
+        with self.managed_connection() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM strategy_families WHERE family_key IN ({placeholders})",
+                normalized,
+            ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            d = dict(row)
+            for factor in ('quality', 'safety', 'adoption'):
+                d[f'{factor}_alpha'] = float(d.get(f'{factor}_alpha', STRATEGY_PRIOR_ALPHA))
+                d[f'{factor}_beta'] = float(d.get(f'{factor}_beta', STRATEGY_PRIOR_BETA))
+                d[f'{factor}_mean'] = self._posterior_mean(d[f'{factor}_alpha'], d[f'{factor}_beta'])
+            result[str(d['family_key'])] = d
+        return result
+
+    def _update_family_stat_tx(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        family_key: str,
+        feedback_type: str,
+        success: bool,
+        now: str,
+    ) -> None:
+        """Update or create a strategy_families row after a child strategy update (Phase 3.2)."""
+        from .learning.families import STRATEGY_FAMILIES
+        if not family_key.strip():
+            return
+        members_json = self._json_dumps(STRATEGY_FAMILIES.get(family_key, []))
+        row = conn.execute(
+            "SELECT * FROM strategy_families WHERE family_key = ?",
+            (family_key,),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """
+                INSERT INTO strategy_families(
+                    family_key, strategy_keys_json,
+                    quality_alpha, quality_beta, safety_alpha, safety_beta,
+                    adoption_alpha, adoption_beta, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (family_key, members_json,
+                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
+                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
+                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
+                 now),
+            )
+            row = conn.execute(
+                "SELECT * FROM strategy_families WHERE family_key = ?",
+                (family_key,),
+            ).fetchone()
+        assert row is not None
+        rd = dict(row)
+        qa = float(rd.get('quality_alpha', STRATEGY_PRIOR_ALPHA))
+        qb = float(rd.get('quality_beta', STRATEGY_PRIOR_BETA))
+        sa = float(rd.get('safety_alpha', STRATEGY_PRIOR_ALPHA))
+        sb = float(rd.get('safety_beta', STRATEGY_PRIOR_BETA))
+        aa = float(rd.get('adoption_alpha', STRATEGY_PRIOR_ALPHA))
+        ab_val = float(rd.get('adoption_beta', STRATEGY_PRIOR_BETA))
+        ft = feedback_type.strip().lower()
+        if ft == 'fix_verified':
+            qa += 1.0
+        elif ft == 'false_positive':
+            qb += 1.0
+            sb += 1.0
+        elif ft in ('candidate_accepted', 'merge_confirmed', 'split_confirmed'):
+            aa += 1.0
+        elif ft in ('candidate_rejected', 'merge_rejected', 'split_rejected'):
+            ab_val += 1.0
+        if success and ft != 'false_positive':
+            sa += 1.0
+        conn.execute(
+            """
+            UPDATE strategy_families
+            SET quality_alpha = ?, quality_beta = ?,
+                safety_alpha = ?, safety_beta = ?,
+                adoption_alpha = ?, adoption_beta = ?,
+                strategy_keys_json = ?, updated_at = ?
+            WHERE family_key = ?
+            """,
+            (qa, qb, sa, sb, aa, ab_val, members_json, now, family_key),
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 3.3 — A/B test framework
+    # ------------------------------------------------------------------
+
+    def create_experiment(
+        self,
+        *,
+        experiment_id: str,
+        name: str,
+        description: str = "",
+        treatment_config: dict[str, Any] | None = None,
+        control_config: dict[str, Any] | None = None,
+        traffic_fraction: float = 0.5,
+    ) -> dict[str, Any]:
+        """Create a new experiment in 'draft' status."""
+        now = utc_now_iso()
+        with self.managed_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO experiment_registry(
+                    experiment_id, name, description,
+                    treatment_config_json, control_config_json,
+                    traffic_fraction, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+                """,
+                (
+                    experiment_id, name, description,
+                    self._json_dumps(treatment_config or {}),
+                    self._json_dumps(control_config or {}),
+                    max(0.0, min(1.0, traffic_fraction)),
+                    now, now,
+                ),
+            )
+        return {"experiment_id": experiment_id, "status": "draft", "created_at": now}
+
+    def update_experiment_status(self, experiment_id: str, status: str) -> dict[str, Any]:
+        """Transition an experiment to a new status."""
+        valid = ('draft', 'running', 'paused', 'completed', 'cancelled')
+        if status not in valid:
+            raise ValueError(f"Invalid experiment status: {status!r}")
+        now = utc_now_iso()
+        with self.managed_connection() as conn:
+            extras: dict[str, Any] = {}
+            if status == "running":
+                conn.execute(
+                    "UPDATE experiment_registry SET status = ?, start_date = COALESCE(start_date, ?), updated_at = ? WHERE experiment_id = ?",
+                    (status, now, now, experiment_id),
+                )
+                extras["start_date"] = now
+            elif status in ("completed", "cancelled"):
+                conn.execute(
+                    "UPDATE experiment_registry SET status = ?, end_date = ?, updated_at = ? WHERE experiment_id = ?",
+                    (status, now, now, experiment_id),
+                )
+                extras["end_date"] = now
+            else:
+                conn.execute(
+                    "UPDATE experiment_registry SET status = ?, updated_at = ? WHERE experiment_id = ?",
+                    (status, now, experiment_id),
+                )
+        return {"experiment_id": experiment_id, "status": status, **extras}
+
+    def get_active_experiment(self) -> dict[str, Any] | None:
+        """Return the single running experiment, or None."""
+        with self.managed_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM experiment_registry WHERE status = 'running' ORDER BY start_date DESC LIMIT 1",
+            ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["treatment_config"] = self._json_loads(d.pop("treatment_config_json", "{}"), fallback={})
+        d["control_config"] = self._json_loads(d.pop("control_config_json", "{}"), fallback={})
+        d["traffic_fraction"] = float(d.get("traffic_fraction", 0.5))
+        return d
+
+    @staticmethod
+    def assign_experiment_arm(experiment: dict[str, Any], session_id: str) -> str:
+        """Deterministic arm assignment via consistent hash on session_id."""
+        import hashlib
+        exp_id = str(experiment.get("experiment_id", ""))
+        digest = hashlib.sha256(f"{exp_id}:{session_id}".encode()).hexdigest()
+        bucket = int(digest[:8], 16) / 0xFFFFFFFF
+        traffic_fraction = float(experiment.get("traffic_fraction", 0.5))
+        return "treatment" if bucket < traffic_fraction else "control"
+
+    def analyze_experiment(self, experiment_id: str) -> dict[str, Any]:
+        """Compute treatment vs control statistics for an experiment."""
+        with self.managed_connection() as conn:
+            exp_row = conn.execute(
+                "SELECT * FROM experiment_registry WHERE experiment_id = ?",
+                (experiment_id,),
+            ).fetchone()
+            if exp_row is None:
+                return {"error": f"Experiment {experiment_id!r} not found"}
+
+            arms: dict[str, dict[str, Any]] = {}
+            for arm in ("treatment", "control"):
+                rows = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN decision_status = 'match' THEN 1 ELSE 0 END) as matches,
+                        SUM(CASE WHEN decision_status = 'abstain' THEN 1 ELSE 0 END) as abstains,
+                        AVG(decision_confidence) as avg_confidence,
+                        AVG(latency_ms) as avg_latency_ms
+                    FROM retrieval_events
+                    WHERE experiment_id = ? AND experiment_arm = ?
+                    """,
+                    (experiment_id, arm),
+                ).fetchone()
+                if rows is None:
+                    arms[arm] = {"total": 0, "matches": 0, "abstains": 0, "avg_confidence": 0.0, "avg_latency_ms": 0.0}
+                else:
+                    d = dict(rows)
+                    total = int(d.get("total", 0) or 0)
+                    arms[arm] = {
+                        "total": total,
+                        "matches": int(d.get("matches", 0) or 0),
+                        "abstains": int(d.get("abstains", 0) or 0),
+                        "match_rate": round(int(d.get("matches", 0) or 0) / total, 4) if total else 0.0,
+                        "avg_confidence": round(float(d.get("avg_confidence", 0) or 0), 4),
+                        "avg_latency_ms": round(float(d.get("avg_latency_ms", 0) or 0), 2),
+                    }
+        return {
+            "experiment_id": experiment_id,
+            "status": dict(exp_row).get("status", "unknown"),
+            "arms": arms,
+        }
 
     def _decode_preference_rule_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         data = dict(row)
@@ -2557,6 +2786,8 @@ class IssueMemoryStore:
         repo_name: str,
         retrieval_mode: str,
         latency_ms: int,
+        experiment_id: str = "",
+        experiment_arm: str = "",
     ) -> dict[str, Any]:
         with self.managed_connection() as conn:
             request_uuid = uuid4().hex
@@ -2578,9 +2809,10 @@ class IssueMemoryStore:
                     root_cause_class, exception_types_json, entity_slots_json, strategy_hints_json,
                     user_scope, env_fingerprint, retrieval_mode, decision_status, decision_confidence,
                     abstain_reason, selected_pattern_id, selected_variant_id, selected_candidate_rank,
-                    latency_ms, token_cost_estimate, created_at
+                    latency_ms, token_cost_estimate, created_at,
+                    experiment_id, experiment_arm
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     request_uuid,
@@ -2609,6 +2841,8 @@ class IssueMemoryStore:
                     int(latency_ms),
                     0,
                     now,
+                    experiment_id,
+                    experiment_arm,
                 ),
             )
             if cur.lastrowid is None:
@@ -2810,6 +3044,7 @@ class IssueMemoryStore:
         strategy_key: str,
         success: bool,
         now: str,
+        feedback_type: str = "",
     ) -> dict[str, Any] | None:
         normalized_key = self._normalized_scope_key(scope_type, scope_key)
         if not strategy_key.strip():
@@ -2826,8 +3061,10 @@ class IssueMemoryStore:
                 """
                 INSERT INTO strategy_stats(
                     scope_type, scope_key, strategy_key, alpha, beta,
-                    success_count, failure_count, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    success_count, failure_count, updated_at,
+                    quality_alpha, quality_beta, safety_alpha, safety_beta,
+                    adoption_alpha, adoption_beta
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     scope_type,
@@ -2838,6 +3075,12 @@ class IssueMemoryStore:
                     0,
                     0,
                     now,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
                 ),
             )
             row = conn.execute(
@@ -2864,13 +3107,41 @@ class IssueMemoryStore:
         beta_after = decayed_beta + failure_delta
         success_count = int(row['success_count']) + success_delta
         failure_count = int(row['failure_count']) + failure_delta
+
+        # Multi-factor posterior updates (Phase 3.1)
+        row_dict = dict(row)
+        qa = float(row_dict.get('quality_alpha', STRATEGY_PRIOR_ALPHA))
+        qb = float(row_dict.get('quality_beta', STRATEGY_PRIOR_BETA))
+        sa = float(row_dict.get('safety_alpha', STRATEGY_PRIOR_ALPHA))
+        sb = float(row_dict.get('safety_beta', STRATEGY_PRIOR_BETA))
+        aa = float(row_dict.get('adoption_alpha', STRATEGY_PRIOR_ALPHA))
+        ab = float(row_dict.get('adoption_beta', STRATEGY_PRIOR_BETA))
+        ft = feedback_type.strip().lower()
+        if ft == 'fix_verified':
+            qa += 1.0
+        elif ft == 'false_positive':
+            qb += 1.0
+            sb += 1.0  # safety failure
+        elif ft in ('candidate_accepted', 'merge_confirmed', 'split_confirmed'):
+            aa += 1.0
+        elif ft in ('candidate_rejected', 'merge_rejected', 'split_rejected'):
+            ab += 1.0
+        # For strong positive: safety success (non-FP)
+        if success and ft != 'false_positive':
+            sa += 1.0
+
         conn.execute(
             """
             UPDATE strategy_stats
-            SET alpha = ?, beta = ?, success_count = ?, failure_count = ?, updated_at = ?
+            SET alpha = ?, beta = ?, success_count = ?, failure_count = ?, updated_at = ?,
+                quality_alpha = ?, quality_beta = ?,
+                safety_alpha = ?, safety_beta = ?,
+                adoption_alpha = ?, adoption_beta = ?
             WHERE scope_type = ? AND scope_key = ? AND strategy_key = ?
             """,
-            (alpha_after, beta_after, success_count, failure_count, now, scope_type, normalized_key, strategy_key),
+            (alpha_after, beta_after, success_count, failure_count, now,
+             qa, qb, sa, sb, aa, ab,
+             scope_type, normalized_key, strategy_key),
         )
         updated_row = conn.execute(
             """
@@ -3060,9 +3331,21 @@ class IssueMemoryStore:
                             strategy_key=strategy_key,
                             success=success,
                             now=now,
+                            feedback_type=feedback_type,
                         )
                         if stat is not None:
                             result['strategy_stat_updates'].append(stat)
+                    # Propagate to family (Phase 3.2)
+                    from .learning.families import resolve_strategy_family
+                    family_key = resolve_strategy_family(strategy_key)
+                    if family_key:
+                        self._update_family_stat_tx(
+                            conn,
+                            family_key=family_key,
+                            feedback_type=feedback_type,
+                            success=success,
+                            now=now,
+                        )
         return result
 
     def _seed_verified_stats_tx(
@@ -3305,6 +3588,50 @@ class IssueMemoryStore:
                 """,
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def query_feature_outcome_matrix(
+        self, *, error_family: str = "", min_samples: int = 5,
+    ) -> dict[str, Any]:
+        """Return per-candidate feature vectors and reward labels for weight calibration.
+
+        Returns:
+            {
+                "samples": [{"features": {name: value, ...}, "reward": float, "error_family": str}, ...],
+                "feature_names": [str, ...],
+            }
+        """
+        with self.managed_connection() as conn:
+            where = ""
+            params: list[Any] = []
+            if error_family:
+                where = "WHERE error_family = ?"
+                params.append(error_family)
+            rows = conn.execute(
+                f"""
+                SELECT retrieval_candidate_id, feature_name, feature_value, reward, error_family
+                FROM feature_outcome_log
+                {where}
+                ORDER BY retrieval_candidate_id
+                """,
+                params,
+            ).fetchall()
+
+        # Group by retrieval_candidate_id
+        candidates: dict[int, dict[str, Any]] = {}
+        feature_names_set: set[str] = set()
+        for r in rows:
+            d = dict(r)
+            cid = int(d["retrieval_candidate_id"])
+            if cid not in candidates:
+                candidates[cid] = {"features": {}, "reward": float(d["reward"]), "error_family": str(d["error_family"])}
+            candidates[cid]["features"][str(d["feature_name"])] = float(d["feature_value"])
+            feature_names_set.add(str(d["feature_name"]))
+
+        samples = list(candidates.values())
+        feature_names = sorted(feature_names_set)
+        if len(samples) < min_samples:
+            return {"samples": [], "feature_names": feature_names, "skipped": True, "reason": f"only {len(samples)} samples (need {min_samples})"}
+        return {"samples": samples, "feature_names": feature_names}
 
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 1.0) -> float:

@@ -50,6 +50,13 @@ class IssueMemoryApp:
             project_scope=project_scope,
             user_scope=resolved_user_scope,
         )
+        # A/B experiment assignment (Phase 3.3)
+        experiment_id = ""
+        experiment_arm = ""
+        active_experiment = self.store.get_active_experiment()
+        if active_experiment and session_id:
+            experiment_id = str(active_experiment.get("experiment_id", ""))
+            experiment_arm = self.store.assign_experiment_arm(active_experiment, session_id)
         matches, decision, event_meta = self.matcher.match_with_decision(
             profile,
             project_scope=project_scope,
@@ -57,6 +64,8 @@ class IssueMemoryApp:
             session_id=session_id,
             repo_name=repo_name,
             log_event=True,
+            experiment_id=experiment_id,
+            experiment_arm=experiment_arm,
         )
         if decision.status == "match":
             next_action = (
@@ -72,7 +81,7 @@ class IssueMemoryApp:
             )
         else:
             next_action = "No reliable memory hit. Use issue_guardrails for preventive hints, continue fresh debugging, then record only a verified reusable fix."
-        return {
+        result: dict[str, Any] = {
             "query_profile": profile.to_dict(),
             "decision": decision.to_dict(),
             "retrieval_event_id": event_meta.get("event_id"),
@@ -80,6 +89,9 @@ class IssueMemoryApp:
             "reasoning": self._build_reasoning(event_meta.get("_ranked", [])),
             "next_action": next_action,
         }
+        if experiment_id:
+            result["experiment"] = {"id": experiment_id, "arm": experiment_arm}
+        return result
 
     @staticmethod
     def _build_reasoning(ranked: list[Any]) -> dict[str, Any]:

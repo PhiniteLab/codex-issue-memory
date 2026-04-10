@@ -13,6 +13,7 @@ from ..storage import (
     VARIANT_PRIOR_BETA,
     IssueMemoryStore,
 )
+from .families import resolve_strategy_family
 from .posteriors import BetaPosterior, build_beta_posterior, shrinkage_weight
 
 
@@ -40,6 +41,9 @@ class StrategyBanditOutcome:
     final_score: float
     conservative_score: float
     reasons: list[str]
+    quality_mean: float = 0.5
+    safety_mean: float = 0.5
+    adoption_mean: float = 0.5
 
 
 class StrategyThompsonBandit:
@@ -138,6 +142,45 @@ class StrategyThompsonBandit:
         normalized = value.strip().lower()
         return normalized in {str(item).strip().lower() for item in items if str(item).strip()}
 
+    def _load_factor_posterior(
+        self,
+        row: dict[str, Any] | None,
+        *,
+        factor: str,
+        half_life_days: int,
+        seed_parts: tuple[Any, ...],
+        velocity_multiplier: float = 1.0,
+    ) -> BetaPosterior:
+        alpha = float(row.get(f"{factor}_alpha", STRATEGY_PRIOR_ALPHA)) if row is not None else float(STRATEGY_PRIOR_ALPHA)
+        beta = float(row.get(f"{factor}_beta", STRATEGY_PRIOR_BETA)) if row is not None else float(STRATEGY_PRIOR_BETA)
+        updated_at = str(row.get("updated_at", "")) if row is not None else ""
+        return build_beta_posterior(
+            alpha=alpha,
+            beta=beta,
+            updated_at=updated_at,
+            half_life_days=half_life_days,
+            prior_alpha=STRATEGY_PRIOR_ALPHA,
+            prior_beta=STRATEGY_PRIOR_BETA,
+            seed_parts=seed_parts + (factor,),
+            velocity_multiplier=velocity_multiplier,
+        )
+
+    def _composite_multi_factor_score(
+        self,
+        *,
+        quality: BetaPosterior,
+        safety: BetaPosterior,
+        adoption: BetaPosterior,
+    ) -> tuple[float, float, float]:
+        """Compute quality × safety × adoption^0.5 as composite mean/sample/std."""
+        q_signal = 0.70 * quality.mean + 0.30 * quality.sample
+        s_signal = 0.70 * safety.mean + 0.30 * safety.sample
+        a_signal = 0.70 * adoption.mean + 0.30 * adoption.sample
+        composite_signal = q_signal * s_signal * (a_signal ** 0.5)
+        composite_mean = quality.mean * safety.mean * (adoption.mean ** 0.5)
+        composite_std = max(quality.std, safety.std, adoption.std)
+        return composite_mean, composite_signal, composite_std
+
     def _negative_applicability_penalty(self, profile: QueryProfile, variant: dict[str, Any]) -> tuple[float, list[str], int]:
         payload = variant.get("negative_applicability_json")
         if not isinstance(payload, dict) or not payload:
@@ -193,6 +236,10 @@ class StrategyThompsonBandit:
             repo_name=profile.repo_name,
             user_scope=profile.user_scope,
         )
+
+        # Load family-level priors for hierarchical shrinkage (Phase 3.2)
+        family_keys = list({resolve_strategy_family(sk) for sk in strategy_keys if resolve_strategy_family(sk)})
+        family_stats = self.store.load_family_stats(family_keys) if family_keys else {}
 
         velocity = self.store.query_repo_feedback_velocity(profile.repo_name)
 
@@ -252,6 +299,70 @@ class StrategyThompsonBandit:
                 repo_posterior=repo_posterior,
                 user_posterior=user_posterior,
             )
+
+            # Multi-factor posteriors (Phase 3.1) — use global row for factor data
+            global_row = snapshot.get("global", {}).get(strategy_key)
+            quality_post = self._load_factor_posterior(
+                global_row, factor="quality",
+                half_life_days=self.settings.strategy_half_life_days,
+                seed_parts=seed_base + ("quality",), velocity_multiplier=velocity,
+            )
+            safety_post = self._load_factor_posterior(
+                global_row, factor="safety",
+                half_life_days=self.settings.strategy_half_life_days,
+                seed_parts=seed_base + ("safety",), velocity_multiplier=velocity,
+            )
+            adoption_post = self._load_factor_posterior(
+                global_row, factor="adoption",
+                half_life_days=self.settings.strategy_half_life_days,
+                seed_parts=seed_base + ("adoption",), velocity_multiplier=velocity,
+            )
+
+            # Family hierarchical shrinkage (Phase 3.2)
+            fam_key = resolve_strategy_family(strategy_key)
+            fam_row = family_stats.get(fam_key) if fam_key else None
+            if fam_row is not None:
+                fam_quality = self._load_factor_posterior(
+                    fam_row, factor="quality",
+                    half_life_days=self.settings.strategy_half_life_days,
+                    seed_parts=seed_base + ("family", "quality"), velocity_multiplier=velocity,
+                )
+                fam_safety = self._load_factor_posterior(
+                    fam_row, factor="safety",
+                    half_life_days=self.settings.strategy_half_life_days,
+                    seed_parts=seed_base + ("family", "safety"), velocity_multiplier=velocity,
+                )
+                fam_adoption = self._load_factor_posterior(
+                    fam_row, factor="adoption",
+                    half_life_days=self.settings.strategy_half_life_days,
+                    seed_parts=seed_base + ("family", "adoption"), velocity_multiplier=velocity,
+                )
+                _FAMILY_LAMBDA = 4.0
+                for strat_post, fam_post in [
+                    (quality_post, fam_quality),
+                    (safety_post, fam_safety),
+                    (adoption_post, fam_adoption),
+                ]:
+                    sw = shrinkage_weight(strat_post.effective_observations, lambda_value=_FAMILY_LAMBDA)
+                    blended_mean = sw * strat_post.mean + (1.0 - sw) * fam_post.mean
+                    blended_sample = sw * strat_post.sample + (1.0 - sw) * fam_post.sample
+                    # Mutate in-place via object.__setattr__ on slots
+                    object.__setattr__(strat_post, 'mean', blended_mean)
+                    object.__setattr__(strat_post, 'sample', blended_sample)
+
+            composite_mean, composite_signal, _composite_std = self._composite_multi_factor_score(
+                quality=quality_post, safety=safety_post, adoption=adoption_post,
+            )
+            # Blend single-factor signal with multi-factor composite
+            factor_evidence = max(
+                quality_post.effective_observations,
+                safety_post.effective_observations,
+                adoption_post.effective_observations,
+            )
+            factor_blend = min(factor_evidence / 8.0, 1.0)  # ramp to full weight over ~8 obs
+            strategy_mean = (1.0 - factor_blend) * strategy_mean + factor_blend * composite_mean
+            strategy_sample = (1.0 - factor_blend) * strategy_sample + factor_blend * composite_signal
+
             if strategy_key in {"", "general_reusable_fix"}:
                 strategy_mean = 0.5
                 strategy_sample = 0.5
@@ -322,6 +433,9 @@ class StrategyThompsonBandit:
                 final_score=final_score,
                 conservative_score=conservative_score,
                 reasons=reasons,
+                quality_mean=quality_post.mean,
+                safety_mean=safety_post.mean,
+                adoption_mean=adoption_post.mean,
             )
         return results
 
