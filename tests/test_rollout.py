@@ -114,6 +114,22 @@ class Phase8RolloutTests(unittest.TestCase):
             payload["env"]["ISSUE_MEMORY_SERVER_OWNER_KEY_ENV"],
             "ISSUE_MEMORY_MAIN_CONVERSATION_KEY",
         )
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY"], "1"
+        )
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON"], "1"
+        )
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"],
+            "0",
+        )
+        self.assertEqual(
+            payload["env"][
+                "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS"
+            ],
+            "1.0",
+        )
 
     def test_doctor_passes_for_registered_shadow_rollout(self) -> None:
         self._register_codex()
@@ -152,6 +168,33 @@ class Phase8RolloutTests(unittest.TestCase):
         self.assertEqual(len(owner_env_checks), 1)
         self.assertFalse(owner_env_checks[0]["ok"])
 
+    def test_doctor_fails_when_idle_timeout_differs_from_recommended_config(
+        self,
+    ) -> None:
+        self._register_codex()
+        config_path = self.codex_home / "config.toml"
+        config_text = config_path.read_text(encoding="utf-8").replace(
+            'ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS = "0"\n',
+            'ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS = "300"\n',
+        )
+        config_path.write_text(config_text, encoding="utf-8")
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            cmd_doctor(mode="shadow", max_instances=0, codex_home=str(self.codex_home))
+        payload = json.loads(buffer.getvalue())
+
+        self.assertEqual(payload["status"], "fail")
+        self.assertGreaterEqual(payload["summary"]["errors"], 1)
+        timeout_checks = [
+            item
+            for item in payload["checks"]
+            if item["name"]
+            == "env:ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS"
+        ]
+        self.assertEqual(len(timeout_checks), 1)
+        self.assertFalse(timeout_checks[0]["ok"])
+
     def test_register_codex_writes_recommended_flags(self) -> None:
         self._register_codex()
         config_text = (self.codex_home / "config.toml").read_text(encoding="utf-8")
@@ -165,6 +208,20 @@ class Phase8RolloutTests(unittest.TestCase):
         self.assertIn('ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY = "1"', config_text)
         self.assertIn(
             'ISSUE_MEMORY_SERVER_OWNER_KEY_ENV = "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"',
+            config_text,
+        )
+        self.assertIn(
+            'ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY = "1"', config_text
+        )
+        self.assertIn(
+            'ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON = "1"', config_text
+        )
+        self.assertIn(
+            'ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS = "0"',
+            config_text,
+        )
+        self.assertIn(
+            'ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS = "1.0"',
             config_text,
         )
 
