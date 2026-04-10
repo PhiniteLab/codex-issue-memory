@@ -8,7 +8,9 @@ import re
 import sqlite3
 from typing import Any
 
-MIGRATION_NAME_RE = re.compile(r"^(?P<version>\d{3})_(?P<name>[a-z0-9_]+)\.sql$", re.IGNORECASE)
+MIGRATION_NAME_RE = re.compile(
+    r"^(?P<version>\d{3})_(?P<name>[a-z0-9_]+)\.sql$", re.IGNORECASE
+)
 
 
 class MigrationError(RuntimeError):
@@ -87,7 +89,9 @@ class MigrationRunner:
         ).fetchone()
         return row is not None
 
-    def applied_migrations(self, conn: sqlite3.Connection, *, create_if_missing: bool = True) -> list[dict[str, Any]]:
+    def applied_migrations(
+        self, conn: sqlite3.Connection, *, create_if_missing: bool = True
+    ) -> list[dict[str, Any]]:
         if create_if_missing:
             self.ensure_schema_migrations_table(conn)
         elif not self._has_schema_migrations_table(conn):
@@ -106,7 +110,9 @@ class MigrationRunner:
             migrations=applied,
         )
 
-    def apply_all(self, conn: sqlite3.Connection, *, target_version: int | None = None) -> list[MigrationAsset]:
+    def apply_all(
+        self, conn: sqlite3.Connection, *, target_version: int | None = None
+    ) -> list[MigrationAsset]:
         self.ensure_schema_migrations_table(conn)
         migrations = self.list_migrations()
         applied_rows = self.applied_migrations(conn)

@@ -70,11 +70,15 @@ class StrategyThompsonBandit:
 
     @staticmethod
     def _scope_signal(posterior: BetaPosterior, *, scope_name: str) -> float:
-        exploration = 0.30 if scope_name == "user" else 0.25 if scope_name == "repo" else 0.20
+        exploration = (
+            0.30 if scope_name == "user" else 0.25 if scope_name == "repo" else 0.20
+        )
         return (1.0 - exploration) * posterior.mean + exploration * posterior.sample
 
     @staticmethod
-    def _weighted_std(weights: dict[str, float], posteriors: dict[str, BetaPosterior]) -> float:
+    def _weighted_std(
+        weights: dict[str, float], posteriors: dict[str, BetaPosterior]
+    ) -> float:
         variance = 0.0
         for name, weight in weights.items():
             variance += (float(weight) ** 2) * (float(posteriors[name].std) ** 2)
@@ -90,8 +94,14 @@ class StrategyThompsonBandit:
         seed_parts: tuple[Any, ...],
         velocity_multiplier: float = 1.0,
     ) -> BetaPosterior:
-        alpha = float(row.get("alpha", prior_alpha)) if row is not None else float(prior_alpha)
-        beta = float(row.get("beta", prior_beta)) if row is not None else float(prior_beta)
+        alpha = (
+            float(row.get("alpha", prior_alpha))
+            if row is not None
+            else float(prior_alpha)
+        )
+        beta = (
+            float(row.get("beta", prior_beta)) if row is not None else float(prior_beta)
+        )
         updated_at = str(row.get("updated_at", "")) if row is not None else ""
         return build_beta_posterior(
             alpha=alpha,
@@ -112,15 +122,28 @@ class StrategyThompsonBandit:
         user_posterior: BetaPosterior,
     ) -> tuple[float, float, float]:
         raw_weights = {
-            "global": shrinkage_weight(global_posterior.effective_observations, lambda_value=_SCOPE_LAMBDAS["global"]),
-            "repo": shrinkage_weight(repo_posterior.effective_observations, lambda_value=_SCOPE_LAMBDAS["repo"]),
-            "user": shrinkage_weight(user_posterior.effective_observations, lambda_value=_SCOPE_LAMBDAS["user"]),
+            "global": shrinkage_weight(
+                global_posterior.effective_observations,
+                lambda_value=_SCOPE_LAMBDAS["global"],
+            ),
+            "repo": shrinkage_weight(
+                repo_posterior.effective_observations,
+                lambda_value=_SCOPE_LAMBDAS["repo"],
+            ),
+            "user": shrinkage_weight(
+                user_posterior.effective_observations,
+                lambda_value=_SCOPE_LAMBDAS["user"],
+            ),
         }
         if sum(raw_weights.values()) <= 1e-9:
             weights = {"global": 1.0}
         else:
             total = sum(raw_weights.values())
-            weights = {name: value / total for name, value in raw_weights.items() if value > 0.0}
+            weights = {
+                name: value / total
+                for name, value in raw_weights.items()
+                if value > 0.0
+            }
         posteriors = {
             "global": global_posterior,
             "repo": repo_posterior,
@@ -140,7 +163,9 @@ class StrategyThompsonBandit:
         if not value or not isinstance(items, list):
             return False
         normalized = value.strip().lower()
-        return normalized in {str(item).strip().lower() for item in items if str(item).strip()}
+        return normalized in {
+            str(item).strip().lower() for item in items if str(item).strip()
+        }
 
     def _load_factor_posterior(
         self,
@@ -151,8 +176,16 @@ class StrategyThompsonBandit:
         seed_parts: tuple[Any, ...],
         velocity_multiplier: float = 1.0,
     ) -> BetaPosterior:
-        alpha = float(row.get(f"{factor}_alpha", STRATEGY_PRIOR_ALPHA)) if row is not None else float(STRATEGY_PRIOR_ALPHA)
-        beta = float(row.get(f"{factor}_beta", STRATEGY_PRIOR_BETA)) if row is not None else float(STRATEGY_PRIOR_BETA)
+        alpha = (
+            float(row.get(f"{factor}_alpha", STRATEGY_PRIOR_ALPHA))
+            if row is not None
+            else float(STRATEGY_PRIOR_ALPHA)
+        )
+        beta = (
+            float(row.get(f"{factor}_beta", STRATEGY_PRIOR_BETA))
+            if row is not None
+            else float(STRATEGY_PRIOR_BETA)
+        )
         updated_at = str(row.get("updated_at", "")) if row is not None else ""
         return build_beta_posterior(
             alpha=alpha,
@@ -176,12 +209,14 @@ class StrategyThompsonBandit:
         q_signal = 0.70 * quality.mean + 0.30 * quality.sample
         s_signal = 0.70 * safety.mean + 0.30 * safety.sample
         a_signal = 0.70 * adoption.mean + 0.30 * adoption.sample
-        composite_signal = q_signal * s_signal * (a_signal ** 0.5)
-        composite_mean = quality.mean * safety.mean * (adoption.mean ** 0.5)
+        composite_signal = q_signal * s_signal * (a_signal**0.5)
+        composite_mean = quality.mean * safety.mean * (adoption.mean**0.5)
         composite_std = max(quality.std, safety.std, adoption.std)
         return composite_mean, composite_signal, composite_std
 
-    def _negative_applicability_penalty(self, profile: QueryProfile, variant: dict[str, Any]) -> tuple[float, list[str], int]:
+    def _negative_applicability_penalty(
+        self, profile: QueryProfile, variant: dict[str, Any]
+    ) -> tuple[float, list[str], int]:
         payload = variant.get("negative_applicability_json")
         if not isinstance(payload, dict) or not payload:
             return 0.0, [], 0
@@ -191,10 +226,14 @@ class StrategyThompsonBandit:
         if self._match_any(profile.project_scope, payload.get("project_scopes")):
             penalty += 0.08
             reasons.append("negative-applicability-project-scope")
-        if profile.user_scope and self._match_any(profile.user_scope, payload.get("user_scopes")):
+        if profile.user_scope and self._match_any(
+            profile.user_scope, payload.get("user_scopes")
+        ):
             penalty += 0.08
             reasons.append("negative-applicability-user-scope")
-        if profile.repo_name and self._match_any(profile.repo_name, payload.get("repo_names")):
+        if profile.repo_name and self._match_any(
+            profile.repo_name, payload.get("repo_names")
+        ):
             penalty += 0.12
             reasons.append("negative-applicability-repo-name")
         command_value = " ".join(profile.command_tokens).strip().lower()
@@ -214,7 +253,9 @@ class StrategyThompsonBandit:
         *,
         project_scope: str,
     ) -> dict[str, StrategyBanditOutcome]:
-        del project_scope  # reserved for future scope-aware priors without changing signature
+        del (
+            project_scope
+        )  # reserved for future scope-aware priors without changing signature
         if not ranked_items:
             return {}
 
@@ -238,7 +279,13 @@ class StrategyThompsonBandit:
         )
 
         # Load family-level priors for hierarchical shrinkage (Phase 3.2)
-        family_keys = list({resolve_strategy_family(sk) for sk in strategy_keys if resolve_strategy_family(sk)})
+        family_keys = list(
+            {
+                resolve_strategy_family(sk)
+                for sk in strategy_keys
+                if resolve_strategy_family(sk)
+            }
+        )
         family_stats = self.store.load_family_stats(family_keys) if family_keys else {}
 
         velocity = self.store.query_repo_feedback_velocity(profile.repo_name)
@@ -294,28 +341,36 @@ class StrategyThompsonBandit:
                 velocity_multiplier=velocity,
             )
 
-            strategy_mean, strategy_sample, strategy_std = self._combined_strategy_signal(
-                global_posterior=global_posterior,
-                repo_posterior=repo_posterior,
-                user_posterior=user_posterior,
+            strategy_mean, strategy_sample, strategy_std = (
+                self._combined_strategy_signal(
+                    global_posterior=global_posterior,
+                    repo_posterior=repo_posterior,
+                    user_posterior=user_posterior,
+                )
             )
 
             # Multi-factor posteriors (Phase 3.1) — use global row for factor data
             global_row = snapshot.get("global", {}).get(strategy_key)
             quality_post = self._load_factor_posterior(
-                global_row, factor="quality",
+                global_row,
+                factor="quality",
                 half_life_days=self.settings.strategy_half_life_days,
-                seed_parts=seed_base + ("quality",), velocity_multiplier=velocity,
+                seed_parts=seed_base + ("quality",),
+                velocity_multiplier=velocity,
             )
             safety_post = self._load_factor_posterior(
-                global_row, factor="safety",
+                global_row,
+                factor="safety",
                 half_life_days=self.settings.strategy_half_life_days,
-                seed_parts=seed_base + ("safety",), velocity_multiplier=velocity,
+                seed_parts=seed_base + ("safety",),
+                velocity_multiplier=velocity,
             )
             adoption_post = self._load_factor_posterior(
-                global_row, factor="adoption",
+                global_row,
+                factor="adoption",
                 half_life_days=self.settings.strategy_half_life_days,
-                seed_parts=seed_base + ("adoption",), velocity_multiplier=velocity,
+                seed_parts=seed_base + ("adoption",),
+                velocity_multiplier=velocity,
             )
 
             # Family hierarchical shrinkage (Phase 3.2)
@@ -323,19 +378,25 @@ class StrategyThompsonBandit:
             fam_row = family_stats.get(fam_key) if fam_key else None
             if fam_row is not None:
                 fam_quality = self._load_factor_posterior(
-                    fam_row, factor="quality",
+                    fam_row,
+                    factor="quality",
                     half_life_days=self.settings.strategy_half_life_days,
-                    seed_parts=seed_base + ("family", "quality"), velocity_multiplier=velocity,
+                    seed_parts=seed_base + ("family", "quality"),
+                    velocity_multiplier=velocity,
                 )
                 fam_safety = self._load_factor_posterior(
-                    fam_row, factor="safety",
+                    fam_row,
+                    factor="safety",
                     half_life_days=self.settings.strategy_half_life_days,
-                    seed_parts=seed_base + ("family", "safety"), velocity_multiplier=velocity,
+                    seed_parts=seed_base + ("family", "safety"),
+                    velocity_multiplier=velocity,
                 )
                 fam_adoption = self._load_factor_posterior(
-                    fam_row, factor="adoption",
+                    fam_row,
+                    factor="adoption",
                     half_life_days=self.settings.strategy_half_life_days,
-                    seed_parts=seed_base + ("family", "adoption"), velocity_multiplier=velocity,
+                    seed_parts=seed_base + ("family", "adoption"),
+                    velocity_multiplier=velocity,
                 )
                 _FAMILY_LAMBDA = 4.0
                 for strat_post, fam_post in [
@@ -343,15 +404,23 @@ class StrategyThompsonBandit:
                     (safety_post, fam_safety),
                     (adoption_post, fam_adoption),
                 ]:
-                    sw = shrinkage_weight(strat_post.effective_observations, lambda_value=_FAMILY_LAMBDA)
+                    sw = shrinkage_weight(
+                        strat_post.effective_observations, lambda_value=_FAMILY_LAMBDA
+                    )
                     blended_mean = sw * strat_post.mean + (1.0 - sw) * fam_post.mean
-                    blended_sample = sw * strat_post.sample + (1.0 - sw) * fam_post.sample
+                    blended_sample = (
+                        sw * strat_post.sample + (1.0 - sw) * fam_post.sample
+                    )
                     # Mutate in-place via object.__setattr__ on slots
-                    object.__setattr__(strat_post, 'mean', blended_mean)
-                    object.__setattr__(strat_post, 'sample', blended_sample)
+                    object.__setattr__(strat_post, "mean", blended_mean)
+                    object.__setattr__(strat_post, "sample", blended_sample)
 
-            composite_mean, composite_signal, _composite_std = self._composite_multi_factor_score(
-                quality=quality_post, safety=safety_post, adoption=adoption_post,
+            composite_mean, composite_signal, _composite_std = (
+                self._composite_multi_factor_score(
+                    quality=quality_post,
+                    safety=safety_post,
+                    adoption=adoption_post,
+                )
             )
             # Blend single-factor signal with multi-factor composite
             factor_evidence = max(
@@ -359,9 +428,15 @@ class StrategyThompsonBandit:
                 safety_post.effective_observations,
                 adoption_post.effective_observations,
             )
-            factor_blend = min(factor_evidence / 8.0, 1.0)  # ramp to full weight over ~8 obs
-            strategy_mean = (1.0 - factor_blend) * strategy_mean + factor_blend * composite_mean
-            strategy_sample = (1.0 - factor_blend) * strategy_sample + factor_blend * composite_signal
+            factor_blend = min(
+                factor_evidence / 8.0, 1.0
+            )  # ramp to full weight over ~8 obs
+            strategy_mean = (
+                1.0 - factor_blend
+            ) * strategy_mean + factor_blend * composite_mean
+            strategy_sample = (
+                1.0 - factor_blend
+            ) * strategy_sample + factor_blend * composite_signal
 
             if strategy_key in {"", "general_reusable_fix"}:
                 strategy_mean = 0.5
@@ -374,13 +449,20 @@ class StrategyThompsonBandit:
                     repo_posterior.effective_observations,
                     user_posterior.effective_observations,
                 )
-            variant_signal = 0.65 * variant_posterior.mean + 0.35 * variant_posterior.sample
+            variant_signal = (
+                0.65 * variant_posterior.mean + 0.35 * variant_posterior.sample
+            )
 
-            negative_penalty, negative_reasons, fp_count = self._negative_applicability_penalty(profile, variant)
+            negative_penalty, negative_reasons, fp_count = (
+                self._negative_applicability_penalty(profile, variant)
+            )
 
-            effective_evidence = strategy_effective + 0.5 * variant_posterior.effective_observations
+            effective_evidence = (
+                strategy_effective + 0.5 * variant_posterior.effective_observations
+            )
             evidence_scale = min(
-                effective_evidence / max(float(self.settings.minimum_strategy_evidence), 1.0),
+                effective_evidence
+                / max(float(self.settings.minimum_strategy_evidence), 1.0),
                 1.0,
             )
 
@@ -402,8 +484,12 @@ class StrategyThompsonBandit:
             conservative_variant = variant_posterior.mean
             conservative_score = self._clamp(
                 base_score
-                + self.settings.strategy_overlay_scale * self._center(conservative_strategy) * evidence_scale
-                + self.settings.variant_overlay_scale * self._center(conservative_variant) * evidence_scale
+                + self.settings.strategy_overlay_scale
+                * self._center(conservative_strategy)
+                * evidence_scale
+                + self.settings.variant_overlay_scale
+                * self._center(conservative_variant)
+                * evidence_scale
                 - negative_penalty
             )
 

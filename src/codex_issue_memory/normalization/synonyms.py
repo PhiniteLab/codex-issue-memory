@@ -3,6 +3,7 @@
 Provides bidirectional synonym mappings and an expansion function that
 augments token lists with known equivalents.
 """
+
 from __future__ import annotations
 
 # Bidirectional synonym pairs  (term_a, term_b)

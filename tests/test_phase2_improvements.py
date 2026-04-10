@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
-import time
 import unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -41,6 +39,7 @@ class IntraSessionDecayTests(unittest.TestCase):
         os.environ["ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES"] = "60"
         try:
             from codex_issue_memory.settings import Settings
+
             s = Settings.from_env()
             self.assertAlmostEqual(s.session_decay_half_life_minutes, 60.0)
         finally:
@@ -63,7 +62,9 @@ class IntraSessionDecayTests(unittest.TestCase):
             candidate_rank=1,
         )
         # Now age the session memory row by directly updating updated_at
-        aged_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        aged_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         with self.app.store.managed_connection() as conn:
             conn.execute(
                 "UPDATE session_memory SET updated_at = ? WHERE session_id = ?",
@@ -192,7 +193,9 @@ class ImplicitRejectionTests(unittest.TestCase):
         ev_id = result["retrieval_event_id"]
         self.assertIsNotNone(ev_id)
         # Age the retrieval event
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         with self.app.store.managed_connection() as conn:
             conn.execute(
                 "UPDATE retrieval_events SET created_at = ? WHERE id = ?",
@@ -230,7 +233,9 @@ class ImplicitRejectionTests(unittest.TestCase):
             candidate_rank=1,
         )
         # Age the event
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         with self.app.store.managed_connection() as conn:
             conn.execute(
                 "UPDATE retrieval_events SET created_at = ? WHERE id = ?",
@@ -242,7 +247,7 @@ class ImplicitRejectionTests(unittest.TestCase):
 
     def test_sweep_does_not_affect_recent_events(self) -> None:
         self._seed()
-        result = self.app.issue_match(
+        self.app.issue_match(
             error_text="ModuleNotFoundError: No module named requests in api worker",
         )
         # Don't age the event — it should be too recent
@@ -294,7 +299,7 @@ class CrossSessionLearningTests(unittest.TestCase):
     def test_auto_rule_created_at_threshold(self) -> None:
         """After 3 rejections of the same pattern, an 'avoid' preference rule should be auto-created."""
         self._seed()
-        pattern_id = self._get_first_pattern_id()
+        self._get_first_pattern_id()
         # Reject the pattern 3 times in different sessions
         for session_idx in range(3):
             result = self.app.issue_match(
@@ -460,8 +465,11 @@ class CLISweepImplicitTests(unittest.TestCase):
 
     def test_sweep_implicit_parser_registered(self) -> None:
         from codex_issue_memory.maintenance import build_parser
+
         parser = build_parser()
-        args = parser.parse_args(["sweep-implicit", "--timeout-minutes", "60", "--limit", "100"])
+        args = parser.parse_args(
+            ["sweep-implicit", "--timeout-minutes", "60", "--limit", "100"]
+        )
         self.assertEqual(args.command, "sweep-implicit")
         self.assertEqual(args.timeout_minutes, 60)
         self.assertEqual(args.limit, 100)

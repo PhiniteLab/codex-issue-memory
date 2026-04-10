@@ -183,13 +183,15 @@ def run_merge_correctness_stress(app: Any) -> dict[str, Any]:
         same_variant = int(first["variant_id"]) == int(second["variant_id"])
         if case.expect_same_pattern != same_pattern:
             pattern_split_miss += 1
-            failures.append({
-                "slug": case.slug,
-                "expected_same_pattern": case.expect_same_pattern,
-                "observed_same_pattern": same_pattern,
-                "expected_same_variant": case.expect_same_variant,
-                "observed_same_variant": same_variant,
-            })
+            failures.append(
+                {
+                    "slug": case.slug,
+                    "expected_same_pattern": case.expect_same_pattern,
+                    "observed_same_pattern": same_pattern,
+                    "expected_same_variant": case.expect_same_variant,
+                    "observed_same_variant": same_variant,
+                }
+            )
             continue
         if case.expect_same_variant and same_variant:
             exact_reuse += 1
@@ -197,13 +199,15 @@ def run_merge_correctness_stress(app: Any) -> dict[str, Any]:
             safe_split += 1
         else:
             catastrophic_variant_merge += 1
-            failures.append({
-                "slug": case.slug,
-                "expected_same_pattern": case.expect_same_pattern,
-                "observed_same_pattern": same_pattern,
-                "expected_same_variant": case.expect_same_variant,
-                "observed_same_variant": same_variant,
-            })
+            failures.append(
+                {
+                    "slug": case.slug,
+                    "expected_same_pattern": case.expect_same_pattern,
+                    "observed_same_pattern": same_pattern,
+                    "expected_same_variant": case.expect_same_variant,
+                    "observed_same_variant": same_variant,
+                }
+            )
 
     review_queue = app.issue_review_queue(status="pending", limit=50)
     total_cases = len(MERGE_STRESS_CASES)

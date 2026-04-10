@@ -55,8 +55,12 @@ class NormalizationTests(unittest.TestCase):
         stack_b = 'File "a\\b\\train.py", line 10, in step\nRuntimeError: boom'
         self.assertEqual(make_stack_signature(stack_a), make_stack_signature(stack_b))
 
-        env_a = make_env_fingerprint('{"torch": "2.3.1", "python": "3.12"}', command="python train.py")
-        env_b = make_env_fingerprint('{"python": "3.12", "torch": "2.3.1"}', command="python train.py")
+        env_a = make_env_fingerprint(
+            '{"torch": "2.3.1", "python": "3.12"}', command="python train.py"
+        )
+        env_b = make_env_fingerprint(
+            '{"python": "3.12", "torch": "2.3.1"}', command="python train.py"
+        )
         self.assertEqual(env_a, env_b)
 
     def test_profile_carries_user_scope_and_module_entity(self) -> None:

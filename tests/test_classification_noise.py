@@ -18,7 +18,9 @@ class ClassificationNoiseTests(unittest.TestCase):
         self.assertNotIn("missing-file-signals", profile.evidence)
         self.assertNotIn("path", profile.tags)
 
-    def test_tensor_device_query_with_file_path_is_not_misclassified_as_path_error(self) -> None:
+    def test_tensor_device_query_with_file_path_is_not_misclassified_as_path_error(
+        self,
+    ) -> None:
         profile = build_query_profile(
             error_text="RuntimeError: expected all tensors to be on the same device during SAC replay update",
             file_path="rl/sac/replay_buffer.py",

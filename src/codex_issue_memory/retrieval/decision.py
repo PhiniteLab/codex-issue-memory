@@ -11,7 +11,9 @@ class MatchDecisionPolicy:
     MIN_SPECIFICITY_FOR_ACCEPT = 0.16
     MIN_SPECIFICITY_GAP_FOR_CONTEXT_DOMINANCE = 0.22
 
-    def __init__(self, *, accept_threshold: float, weak_threshold: float, ambiguity_margin: float) -> None:
+    def __init__(
+        self, *, accept_threshold: float, weak_threshold: float, ambiguity_margin: float
+    ) -> None:
         self.accept_threshold = accept_threshold
         self.weak_threshold = weak_threshold
         self.ambiguity_margin = ambiguity_margin
@@ -36,7 +38,9 @@ class MatchDecisionPolicy:
 
     def decide(self, ranked: list[RankedCandidate]) -> MatchDecision:
         if not ranked:
-            return MatchDecision(status="abstain", confidence=0.0, reason="no-supported-candidates")
+            return MatchDecision(
+                status="abstain", confidence=0.0, reason="no-supported-candidates"
+            )
 
         top_score = ranked[0].score
         second_score = ranked[1].score if len(ranked) > 1 else 0.0
@@ -45,7 +49,10 @@ class MatchDecisionPolicy:
         second_specificity = self._specificity(ranked[1]) if len(ranked) > 1 else 0.0
         specificity_gap = max(specificity - second_specificity, 0.0)
 
-        if top_score >= self.weak_threshold and specificity < self.MIN_SPECIFICITY_FOR_WEAK_MATCH:
+        if (
+            top_score >= self.weak_threshold
+            and specificity < self.MIN_SPECIFICITY_FOR_WEAK_MATCH
+        ):
             return MatchDecision(
                 status="abstain",
                 confidence=top_score,
@@ -55,7 +62,10 @@ class MatchDecisionPolicy:
                 gap=gap,
             )
 
-        if top_score >= self.accept_threshold and specificity >= self.MIN_SPECIFICITY_FOR_ACCEPT:
+        if (
+            top_score >= self.accept_threshold
+            and specificity >= self.MIN_SPECIFICITY_FOR_ACCEPT
+        ):
             if gap >= self.ambiguity_margin:
                 return MatchDecision(
                     status="match",

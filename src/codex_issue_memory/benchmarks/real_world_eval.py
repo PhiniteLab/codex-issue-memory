@@ -143,7 +143,9 @@ def seed_real_world_memory(app: Any) -> None:
     seed_dense_bandit_memory(app)
 
 
-def run_real_world_eval(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[str, Any]:
+def run_real_world_eval(
+    app: Any, *, repeats: int = 1, limit: int = 3
+) -> dict[str, Any]:
     positives = POSITIVE_REAL_WORLD_CASES
     negatives = NEGATIVE_REAL_WORLD_CASES
     latencies: list[float] = []
@@ -172,23 +174,30 @@ def run_real_world_eval(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[s
             latencies.append(latency_ms)
             status = str(result["decision"]["status"])
             decision_hist[status] = decision_hist.get(status, 0) + 1
-            top_title = str(result["matches"][0]["title"]) if result.get("matches") else ""
+            top_title = (
+                str(result["matches"][0]["title"]) if result.get("matches") else ""
+            )
             if case.mode == "positive":
                 positive_total += 1
                 family = case.error_family or "unknown"
                 bucket = family_totals.setdefault(family, {"total": 0, "top1": 0})
                 bucket["total"] += 1
-                if top_title == case.expected_title and status in {"match", "ambiguous"}:
+                if top_title == case.expected_title and status in {
+                    "match",
+                    "ambiguous",
+                }:
                     positive_top1 += 1
                     bucket["top1"] += 1
                 else:
-                    failures.append({
-                        "slug": case.slug,
-                        "mode": case.mode,
-                        "status": status,
-                        "expected_title": case.expected_title,
-                        "top_title": top_title,
-                    })
+                    failures.append(
+                        {
+                            "slug": case.slug,
+                            "mode": case.mode,
+                            "status": status,
+                            "expected_title": case.expected_title,
+                            "top_title": top_title,
+                        }
+                    )
                 if status == "match":
                     clear_matches += 1
                     if top_title == case.expected_title:
@@ -198,13 +207,15 @@ def run_real_world_eval(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[s
                 if status in {"abstain", "ambiguous"}:
                     negative_safe += 1
                 else:
-                    failures.append({
-                        "slug": case.slug,
-                        "mode": case.mode,
-                        "status": status,
-                        "expected_status": case.expected_status,
-                        "top_title": top_title,
-                    })
+                    failures.append(
+                        {
+                            "slug": case.slug,
+                            "mode": case.mode,
+                            "status": status,
+                            "expected_status": case.expected_status,
+                            "top_title": top_title,
+                        }
+                    )
 
     family_accuracy = {
         family: round(bucket["top1"] / max(bucket["total"], 1), 4)
@@ -222,7 +233,9 @@ def run_real_world_eval(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[s
         "latency_ms": {
             "mean": round(statistics.mean(latencies), 3) if latencies else 0.0,
             "median": round(statistics.median(latencies), 3) if latencies else 0.0,
-            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3) if latencies else 0.0,
+            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3)
+            if latencies
+            else 0.0,
             "max": round(max(latencies), 3) if latencies else 0.0,
         },
         "failures": failures[:20],

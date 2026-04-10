@@ -30,7 +30,9 @@ class SessionService:
     ) -> dict[str, Any] | None:
         if not session_id:
             return None
-        memory_key = self._variant_key("rejected", pattern_id=pattern_id, variant_id=variant_id)
+        memory_key = self._variant_key(
+            "rejected", pattern_id=pattern_id, variant_id=variant_id
+        )
         value = {
             "pattern_id": pattern_id,
             "variant_id": variant_id,
@@ -39,12 +41,16 @@ class SessionService:
         }
         self.store.clear_session_memory_key(
             session_id=session_id,
-            memory_key=self._variant_key("accepted", pattern_id=pattern_id, variant_id=variant_id),
+            memory_key=self._variant_key(
+                "accepted", pattern_id=pattern_id, variant_id=variant_id
+            ),
         )
         if variant_id is None:
             self.store.clear_session_memory_key(
                 session_id=session_id,
-                memory_key=self._variant_key("accepted", pattern_id=pattern_id, variant_id=None),
+                memory_key=self._variant_key(
+                    "accepted", pattern_id=pattern_id, variant_id=None
+                ),
             )
         return self.store.upsert_session_memory(
             session_id=session_id,
@@ -69,7 +75,9 @@ class SessionService:
     ) -> dict[str, Any] | None:
         if not session_id:
             return None
-        memory_key = self._variant_key("accepted", pattern_id=pattern_id, variant_id=variant_id)
+        memory_key = self._variant_key(
+            "accepted", pattern_id=pattern_id, variant_id=variant_id
+        )
         value = {
             "pattern_id": pattern_id,
             "variant_id": variant_id,
@@ -78,12 +86,16 @@ class SessionService:
         }
         self.store.clear_session_memory_key(
             session_id=session_id,
-            memory_key=self._variant_key("rejected", pattern_id=pattern_id, variant_id=variant_id),
+            memory_key=self._variant_key(
+                "rejected", pattern_id=pattern_id, variant_id=variant_id
+            ),
         )
         if variant_id is not None:
             self.store.clear_session_memory_key(
                 session_id=session_id,
-                memory_key=self._variant_key("rejected", pattern_id=pattern_id, variant_id=None),
+                memory_key=self._variant_key(
+                    "rejected", pattern_id=pattern_id, variant_id=None
+                ),
             )
         return self.store.upsert_session_memory(
             session_id=session_id,

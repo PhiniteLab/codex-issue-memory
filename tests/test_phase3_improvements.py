@@ -6,9 +6,9 @@ Covers:
   3.3 A/B test framework
   3.4 Auto weight calibration
 """
+
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -16,7 +16,10 @@ from typing import Any
 import unittest
 
 from codex_issue_memory.app import IssueMemoryApp
-from codex_issue_memory.learning.families import STRATEGY_FAMILIES, resolve_strategy_family
+from codex_issue_memory.learning.families import (
+    STRATEGY_FAMILIES,
+    resolve_strategy_family,
+)
 from codex_issue_memory.learning.weight_calibration import compute_optimal_weights
 from codex_issue_memory.storage import IssueMemoryStore
 
@@ -37,7 +40,9 @@ class Phase3ImprovementsTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase3-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -123,9 +128,16 @@ class Phase3ImprovementsTests(unittest.TestCase):
 
     def test_resolve_strategy_family(self) -> None:
         """resolve_strategy_family returns correct family or empty string."""
-        self.assertEqual(resolve_strategy_family("install_missing_dependency"), "dependency_management")
-        self.assertEqual(resolve_strategy_family("resolve_from___file__"), "path_resolution")
-        self.assertEqual(resolve_strategy_family("boundary_cast_float32"), "tensor_correctness")
+        self.assertEqual(
+            resolve_strategy_family("install_missing_dependency"),
+            "dependency_management",
+        )
+        self.assertEqual(
+            resolve_strategy_family("resolve_from___file__"), "path_resolution"
+        )
+        self.assertEqual(
+            resolve_strategy_family("boundary_cast_float32"), "tensor_correctness"
+        )
         self.assertEqual(resolve_strategy_family("nonexistent_strategy_key"), "")
 
     def test_strategy_families_table_created(self) -> None:
@@ -151,7 +163,14 @@ class Phase3ImprovementsTests(unittest.TestCase):
         with self.app.store.managed_connection() as conn:
             info = conn.execute("PRAGMA table_info(experiment_registry)").fetchall()
         col_names = {row[1] for row in info}
-        for col in ("experiment_id", "name", "status", "traffic_fraction", "treatment_config_json", "control_config_json"):
+        for col in (
+            "experiment_id",
+            "name",
+            "status",
+            "traffic_fraction",
+            "treatment_config_json",
+            "control_config_json",
+        ):
             self.assertIn(col, col_names)
 
     def test_create_and_manage_experiment(self) -> None:
@@ -205,7 +224,10 @@ class Phase3ImprovementsTests(unittest.TestCase):
     def test_experiment_arm_distribution(self) -> None:
         """Arm assignment produce roughly 50/50 distribution over many sessions."""
         experiment = {"experiment_id": "exp-dist", "traffic_fraction": 0.5}
-        arms = [IssueMemoryStore.assign_experiment_arm(experiment, f"session-{i}") for i in range(200)]
+        arms = [
+            IssueMemoryStore.assign_experiment_arm(experiment, f"session-{i}")
+            for i in range(200)
+        ]
         treatment_count = arms.count("treatment")
         # Expect roughly 50% ± 15% tolerance
         self.assertGreater(treatment_count, 50)
@@ -289,7 +311,9 @@ class Phase3ImprovementsTests(unittest.TestCase):
         # root_score is the discriminating feature, should increase or stay
         overrides = result["weight_overrides"]
         self.assertIn("root_score", overrides)
-        self.assertGreaterEqual(overrides["root_score"], base_weights["root_score"] - 0.051)
+        self.assertGreaterEqual(
+            overrides["root_score"], base_weights["root_score"] - 0.051
+        )
 
     def test_compute_optimal_weights_step_clamping(self) -> None:
         """Weight changes per iteration are clamped to ±0.05."""
@@ -316,8 +340,11 @@ class Phase3ImprovementsTests(unittest.TestCase):
     def test_calibrate_weights_cli_parser(self) -> None:
         """calibrate-weights is registered in maintenance parser."""
         from codex_issue_memory.maintenance import build_parser
+
         parser = build_parser()
-        args = parser.parse_args(["calibrate-weights", "--error-family", "import_error"])
+        args = parser.parse_args(
+            ["calibrate-weights", "--error-family", "import_error"]
+        )
         self.assertEqual(args.command, "calibrate-weights")
         self.assertEqual(args.error_family, "import_error")
 
@@ -328,9 +355,12 @@ class Phase3ImprovementsTests(unittest.TestCase):
     def test_experiment_cli_parser(self) -> None:
         """Experiment CLI commands are registered in maintenance parser."""
         from codex_issue_memory.maintenance import build_parser
+
         parser = build_parser()
 
-        args = parser.parse_args(["create-experiment", "--id", "test-1", "--name", "Test"])
+        args = parser.parse_args(
+            ["create-experiment", "--id", "test-1", "--name", "Test"]
+        )
         self.assertEqual(args.command, "create-experiment")
         self.assertEqual(args.experiment_id, "test-1")
 

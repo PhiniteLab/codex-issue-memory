@@ -52,7 +52,9 @@ def posterior_std(alpha: float, beta: float) -> float:
     return sqrt(max(numerator / denominator, 0.0))
 
 
-def effective_observations(alpha: float, beta: float, *, prior_alpha: float, prior_beta: float) -> float:
+def effective_observations(
+    alpha: float, beta: float, *, prior_alpha: float, prior_beta: float
+) -> float:
     return max(float(alpha) + float(beta) - float(prior_alpha) - float(prior_beta), 0.0)
 
 
@@ -71,7 +73,9 @@ def decay_beta_parameters(
     updated_dt = _parse_iso_datetime(updated_at)
     if updated_dt is None:
         return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
-    age_days = max((datetime.now(timezone.utc) - updated_dt).total_seconds() / 86400.0, 0.0)
+    age_days = max(
+        (datetime.now(timezone.utc) - updated_dt).total_seconds() / 86400.0, 0.0
+    )
     if age_days <= 0.0:
         return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
     effective_half_life = float(half_life_days) * max(float(velocity_multiplier), 0.1)
@@ -132,7 +136,9 @@ def build_beta_posterior(
 def shrinkage_weight(effective_obs: float, *, lambda_value: float) -> float:
     if effective_obs <= 0.0:
         return 0.0
-    return float(effective_obs) / (float(effective_obs) + max(float(lambda_value), 1e-6))
+    return float(effective_obs) / (
+        float(effective_obs) + max(float(lambda_value), 1e-6)
+    )
 
 
 __all__ = [

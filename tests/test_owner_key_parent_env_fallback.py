@@ -66,13 +66,19 @@ class ParentProcessOwnerKeyFallbackTests(unittest.TestCase):
                     }
                 }
             }
-        record = {"timestamp": "2026-03-29T00:00:00Z", "type": "session_meta", "payload": payload}
+        record = {
+            "timestamp": "2026-03-29T00:00:00Z",
+            "type": "session_meta",
+            "payload": payload,
+        }
         session_path = sessions_root / f"rollout-2026-03-29T00-00-00-{thread_id}.jsonl"
         session_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
 
     def test_current_process_explicit_owner_key_wins_over_parent_fallback(self) -> None:
         self._write_session("main-conversation-parent")
-        self._write_session("subagent-thread-parent", forked_from_id="main-conversation-parent")
+        self._write_session(
+            "subagent-thread-parent", forked_from_id="main-conversation-parent"
+        )
         os.environ["ISSUE_MEMORY_MAIN_CONVERSATION_KEY"] = "explicit-main-42"
         os.environ["ISSUE_MEMORY_MAIN_CONVERSATION_ROLE"] = "main"
         with patch(
@@ -81,10 +87,14 @@ class ParentProcessOwnerKeyFallbackTests(unittest.TestCase):
         ):
             settings = Settings.from_env()
         self.assertEqual(settings.server_owner_key, "explicit-main-42")
-        self.assertEqual(settings.server_owner_key_env, "ISSUE_MEMORY_MAIN_CONVERSATION_KEY")
+        self.assertEqual(
+            settings.server_owner_key_env, "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"
+        )
         self.assertEqual(settings.server_owner_role, "main")
 
-    def test_parent_process_codex_thread_can_resolve_owner_key_when_child_env_is_replaced(self) -> None:
+    def test_parent_process_codex_thread_can_resolve_owner_key_when_child_env_is_replaced(
+        self,
+    ) -> None:
         self._write_session("main-conversation-42")
         self._write_session("subagent-thread-42", forked_from_id="main-conversation-42")
         with patch(
@@ -106,7 +116,9 @@ class ParentProcessOwnerKeyFallbackTests(unittest.TestCase):
         self.assertEqual(settings.server_owner_key_env, "")
         self.assertEqual(settings.server_owner_role, "")
 
-    def test_recent_codex_sessions_can_break_tie_when_env_is_missing_everywhere(self) -> None:
+    def test_recent_codex_sessions_can_break_tie_when_env_is_missing_everywhere(
+        self,
+    ) -> None:
         self._write_session("main-conversation-99")
         self._write_session("subagent-thread-99", forked_from_id="main-conversation-99")
         with patch(
@@ -118,7 +130,9 @@ class ParentProcessOwnerKeyFallbackTests(unittest.TestCase):
         self.assertEqual(settings.server_owner_key_env, "CODEX_THREAD_ID")
         self.assertEqual(settings.server_owner_role, "")
 
-    def test_recent_codex_sessions_refuse_to_guess_when_multiple_roots_are_recent(self) -> None:
+    def test_recent_codex_sessions_refuse_to_guess_when_multiple_roots_are_recent(
+        self,
+    ) -> None:
         self._write_session("main-conversation-a")
         self._write_session("main-conversation-b")
         with patch(
@@ -139,7 +153,9 @@ class ParentProcessOwnerKeyFallbackTests(unittest.TestCase):
         ):
             settings = Settings.from_env()
         self.assertTrue(settings.server_owner_key.startswith("synthetic-process-"))
-        self.assertEqual(settings.server_owner_key_env, "ISSUE_MEMORY_SYNTHETIC_OWNER_KEY")
+        self.assertEqual(
+            settings.server_owner_key_env, "ISSUE_MEMORY_SYNTHETIC_OWNER_KEY"
+        )
         self.assertEqual(settings.server_owner_role, "anonymous")
 
 

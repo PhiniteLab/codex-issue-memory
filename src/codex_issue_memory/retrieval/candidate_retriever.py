@@ -13,7 +13,11 @@ class CandidateRetriever:
 
     def __init__(self, store: IssueMemoryStore) -> None:
         self.store = store
-        self.dense_index = DenseEmbeddingIndex(store) if store.settings.enable_dense_retrieval else None
+        self.dense_index = (
+            DenseEmbeddingIndex(store)
+            if store.settings.enable_dense_retrieval
+            else None
+        )
 
     @staticmethod
     def _safe_int(value: Any, *, default: int = 0) -> int:
@@ -60,7 +64,9 @@ class CandidateRetriever:
         return " OR ".join(clean)
 
     @classmethod
-    def _normalize_pattern_candidate(cls, candidate: dict[str, object]) -> dict[str, object]:
+    def _normalize_pattern_candidate(
+        cls, candidate: dict[str, object]
+    ) -> dict[str, object]:
         variant = candidate.get("best_variant")
         variant_id = None
         if isinstance(variant, dict) and variant.get("id") is not None:
@@ -69,19 +75,30 @@ class CandidateRetriever:
         normalized = dict(candidate)
         normalized.setdefault("pattern_id", pattern_id)
         normalized["variant_id"] = variant_id if variant_id not in (0, None) else None
-        normalized.setdefault("candidate_type", "variant" if variant_id not in (0, None) else "pattern")
+        normalized.setdefault(
+            "candidate_type", "variant" if variant_id not in (0, None) else "pattern"
+        )
         normalized.setdefault("episodes", [])
         normalized.setdefault("session_boost", 0.0)
         normalized.setdefault("session_penalty", 0.0)
-        normalized.setdefault("dense_score", cls._safe_float(candidate.get("dense_score"), default=0.0))
-        normalized.setdefault("variant_match_score", cls._safe_float(candidate.get("variant_match_score"), default=0.0))
+        normalized.setdefault(
+            "dense_score", cls._safe_float(candidate.get("dense_score"), default=0.0)
+        )
+        normalized.setdefault(
+            "variant_match_score",
+            cls._safe_float(candidate.get("variant_match_score"), default=0.0),
+        )
         normalized.setdefault("retrieval_signals", {})
         return normalized
 
     @classmethod
-    def _merge_candidate(cls, target: dict[str, object], incoming: dict[str, object]) -> None:
+    def _merge_candidate(
+        cls, target: dict[str, object], incoming: dict[str, object]
+    ) -> None:
         raw_existing_signals = target.get("retrieval_signals", {})
-        existing_signals = dict(raw_existing_signals) if isinstance(raw_existing_signals, dict) else {}
+        existing_signals = (
+            dict(raw_existing_signals) if isinstance(raw_existing_signals, dict) else {}
+        )
         incoming_signals = incoming.get("retrieval_signals", {})
         if isinstance(incoming_signals, dict):
             existing_signals.update(incoming_signals)
@@ -105,7 +122,9 @@ class CandidateRetriever:
             target["episodes"] = incoming.get("episodes")
 
     def _pair_key(self, candidate: dict[str, object]) -> tuple[int, int | None]:
-        pattern_id = self._safe_int(candidate.get("pattern_id", candidate.get("id")), default=0)
+        pattern_id = self._safe_int(
+            candidate.get("pattern_id", candidate.get("id")), default=0
+        )
         raw_variant_id = candidate.get("variant_id")
         variant_id = self._safe_int(raw_variant_id, default=0) or None
         return pattern_id, variant_id
@@ -120,19 +139,24 @@ class CandidateRetriever:
         repo_name: str = "",
     ) -> list[dict[str, object]]:
         # Gather candidate tokens for IDF lookup
-        candidate_tokens = list(dict.fromkeys(
-            re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_")
-            for t in (
-                profile.exception_types
-                + profile.symptom_tokens[:8]
-                + profile.context_tokens[:8]
-                + profile.command_tokens[:4]
-                + profile.path_tokens[:4]
-                + profile.tokens[:8]
+        candidate_tokens = list(
+            dict.fromkeys(
+                re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_")
+                for t in (
+                    profile.exception_types
+                    + profile.symptom_tokens[:8]
+                    + profile.context_tokens[:8]
+                    + profile.command_tokens[:4]
+                    + profile.path_tokens[:4]
+                    + profile.tokens[:8]
+                )
+                if len(re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_"))
+                >= 2
             )
-            if len(re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_")) >= 2
-        ))
-        idf_scores = self.store.query_token_idf(candidate_tokens) if candidate_tokens else {}
+        )
+        idf_scores = (
+            self.store.query_token_idf(candidate_tokens) if candidate_tokens else {}
+        )
         fts_query = self.make_fts_query(profile, idf_scores=idf_scores)
         merged: dict[tuple[int, int | None], dict[str, object]] = {}
 

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..normalization import build_query_profile, derive_strategy_key, infer_strategy_hints, tokenize
+from ..normalization import (
+    build_query_profile,
+    derive_strategy_key,
+    infer_strategy_hints,
+    tokenize,
+)
 from ..storage import IssueMemoryStore
 
 
@@ -43,7 +48,11 @@ class PreferenceService:
         normalized_mode = mode.strip().lower() or "prefer"
         if normalized_mode not in {"prefer", "avoid"}:
             raise ValueError(f"Unsupported preference mode: {mode}")
-        magnitude = abs(float(weight)) if weight is not None else (0.12 if normalized_mode == "prefer" else 0.14)
+        magnitude = (
+            abs(float(weight))
+            if weight is not None
+            else (0.12 if normalized_mode == "prefer" else 0.14)
+        )
         magnitude = min(max(magnitude, 0.02), 0.35)
         return magnitude if normalized_mode == "prefer" else -magnitude
 
@@ -66,10 +75,14 @@ class PreferenceService:
         if not normalized_instruction:
             raise ValueError("Preference instruction must not be empty")
 
-        resolved_user_scope = user_scope.strip() or self.store.settings.default_user_scope
+        resolved_user_scope = (
+            user_scope.strip() or self.store.settings.default_user_scope
+        )
         normalized_repo_name = repo_name.strip()
         normalized_project_scope = project_scope.strip() or "global"
-        scope_type, scope_key = self._resolve_scope(resolved_user_scope, normalized_repo_name)
+        scope_type, scope_key = self._resolve_scope(
+            resolved_user_scope, normalized_repo_name
+        )
 
         profile = build_query_profile(
             error_text=normalized_instruction,
@@ -80,13 +93,23 @@ class PreferenceService:
             project_scope=normalized_project_scope,
             user_scope=resolved_user_scope,
         )
-        strategy_hints = infer_strategy_hints(normalized_instruction, command, file_path)
-        resolved_strategy_key = (
-            strategy_key.strip() if strategy_key and strategy_key != "auto" else derive_strategy_key(normalized_instruction, command, file_path)
+        strategy_hints = infer_strategy_hints(
+            normalized_instruction, command, file_path
         )
-        resolved_error_family = error_family.strip() if error_family and error_family != "auto" else profile.error_family
+        resolved_strategy_key = (
+            strategy_key.strip()
+            if strategy_key and strategy_key != "auto"
+            else derive_strategy_key(normalized_instruction, command, file_path)
+        )
+        resolved_error_family = (
+            error_family.strip()
+            if error_family and error_family != "auto"
+            else profile.error_family
+        )
         if resolved_error_family == "generic_runtime_error":
-            resolved_error_family = _STRATEGY_FAMILY_HINTS.get(resolved_strategy_key, "")
+            resolved_error_family = _STRATEGY_FAMILY_HINTS.get(
+                resolved_strategy_key, ""
+            )
 
         payload = {
             "scope_type": scope_type,
@@ -100,7 +123,7 @@ class PreferenceService:
             "condition": {
                 "repo_name": normalized_repo_name,
                 "command_tokens": tokenize(command, max_tokens=8),
-                "path_tokens": tokenize(file_path.replace('\\', '/'), max_tokens=8),
+                "path_tokens": tokenize(file_path.replace("\\", "/"), max_tokens=8),
                 "strategy_hints": strategy_hints,
                 "mode": mode.strip().lower() or "prefer",
             },

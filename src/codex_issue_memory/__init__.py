@@ -2,7 +2,18 @@
 
 __version__ = "0.1.0"
 
-from . import backup, learning, matching, migrations, models, normalization, retrieval, services, settings, storage
+from . import (
+    backup,
+    learning,
+    matching,
+    migrations,
+    models,
+    normalization,
+    retrieval,
+    services,
+    settings,
+    storage,
+)
 
 __all__ = [
     "settings",

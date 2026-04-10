@@ -8,20 +8,46 @@ from .text import normalize_text, tokenize
 
 _MODULE_PATTERNS = (
     re.compile(r"no module named ['\"]?([a-zA-Z0-9_.-]+)['\"]?", re.IGNORECASE),
-    re.compile(r"cannot import name ['\"]?([a-zA-Z0-9_.-]+)['\"]? from ['\"]?([a-zA-Z0-9_.-]+)['\"]?", re.IGNORECASE),
+    re.compile(
+        r"cannot import name ['\"]?([a-zA-Z0-9_.-]+)['\"]? from ['\"]?([a-zA-Z0-9_.-]+)['\"]?",
+        re.IGNORECASE,
+    ),
 )
 _CONFIG_KEY_PATTERNS = (
-    re.compile(r"missing (?:required )?(?:config )?key ['\"]?([a-zA-Z0-9_.-]+)['\"]?", re.IGNORECASE),
+    re.compile(
+        r"missing (?:required )?(?:config )?key ['\"]?([a-zA-Z0-9_.-]+)['\"]?",
+        re.IGNORECASE,
+    ),
     re.compile(r"keyerror: ['\"]?([a-zA-Z0-9_.-]+)['\"]?", re.IGNORECASE),
 )
 _PATH_PATTERNS = (
-    re.compile(r"((?:[a-zA-Z]:)?[\/][^\s:'\"]+|(?:\.?\.?/)?[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)+)"),
-    re.compile(r"([a-zA-Z0-9_.-]+\.(?:py|yml|yaml|json|toml|pt|pth|ckpt|sqlite3|db|txt|csv))", re.IGNORECASE),
+    re.compile(
+        r"((?:[a-zA-Z]:)?[\/][^\s:'\"]+|(?:\.?\.?/)?[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)+)"
+    ),
+    re.compile(
+        r"([a-zA-Z0-9_.-]+\.(?:py|yml|yaml|json|toml|pt|pth|ckpt|sqlite3|db|txt|csv))",
+        re.IGNORECASE,
+    ),
 )
 _DEVICE_PATTERN = re.compile(r"\b(cpu|cuda|mps|xpu)\b", re.IGNORECASE)
-_DTYPE_PATTERN = re.compile(r"\b(float16|float32|float64|bfloat16|int8|int16|int32|int64|long|half|double)\b", re.IGNORECASE)
+_DTYPE_PATTERN = re.compile(
+    r"\b(float16|float32|float64|bfloat16|int8|int16|int32|int64|long|half|double)\b",
+    re.IGNORECASE,
+)
 _SHAPE_PATTERN = re.compile(r"\(([0-9, x\s-]+)\)")
-_ALGO_NAMES = {"ppo", "sac", "ddpg", "td3", "a2c", "a3c", "mpc", "hjb", "bellman", "dqn", "reinforce"}
+_ALGO_NAMES = {
+    "ppo",
+    "sac",
+    "ddpg",
+    "td3",
+    "a2c",
+    "a3c",
+    "mpc",
+    "hjb",
+    "bellman",
+    "dqn",
+    "reinforce",
+}
 
 _CRITICAL_SCALAR_KEYS = (
     "module_name",
@@ -98,13 +124,21 @@ def extract_entity_slots(
     del env_json  # reserved for later structured extraction without changing API
 
     slots: dict[str, Any] = {}
-    combined = "\n".join(part for part in [error_text, context, stack_excerpt, command, file_path] if part)
+    combined = "\n".join(
+        part
+        for part in [error_text, context, stack_excerpt, command, file_path]
+        if part
+    )
     normalized = normalize_text(combined)
 
     module_name = ""
     import_target = ""
     for pattern in _MODULE_PATTERNS:
-        match = pattern.search(error_text) or pattern.search(context) or pattern.search(stack_excerpt)
+        match = (
+            pattern.search(error_text)
+            or pattern.search(context)
+            or pattern.search(stack_excerpt)
+        )
         if not match:
             continue
         module_name = match.group(1).strip().lower()
@@ -122,7 +156,9 @@ def extract_entity_slots(
             slots["config_key"] = match.group(1).strip().lower()
             break
 
-    missing_path = _normalize_path(_first_path_candidate(error_text, context, stack_excerpt))
+    missing_path = _normalize_path(
+        _first_path_candidate(error_text, context, stack_excerpt)
+    )
     anchor_path = _normalize_path(file_path)
     if missing_path:
         slots["missing_path"] = missing_path
@@ -173,7 +209,9 @@ def extract_entity_slots(
 
 def _normalize_entity_value(value: Any) -> str:
     if isinstance(value, list):
-        return " ".join(str(item).strip().lower() for item in value if str(item).strip())
+        return " ".join(
+            str(item).strip().lower() for item in value if str(item).strip()
+        )
     return str(value).strip().lower()
 
 
@@ -229,8 +267,24 @@ def compare_entity_slots(
             reasons.append(f"entity-conflict:{key}")
 
     for key in _LIST_KEYS:
-        lset = {str(item).strip().lower() for item in left.get(key, []) if str(item).strip()} if isinstance(left.get(key), list) else set()
-        rset = {str(item).strip().lower() for item in right.get(key, []) if str(item).strip()} if isinstance(right.get(key), list) else set()
+        lset = (
+            {
+                str(item).strip().lower()
+                for item in left.get(key, [])
+                if str(item).strip()
+            }
+            if isinstance(left.get(key), list)
+            else set()
+        )
+        rset = (
+            {
+                str(item).strip().lower()
+                for item in right.get(key, [])
+                if str(item).strip()
+            }
+            if isinstance(right.get(key), list)
+            else set()
+        )
         if not lset or not rset:
             continue
         overlap = lset & rset

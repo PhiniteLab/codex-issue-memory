@@ -13,7 +13,9 @@ class SessionMemoryTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-session-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -58,7 +60,12 @@ class SessionMemoryTests(unittest.TestCase):
         self._seed_close_import_patterns()
         query = "ModuleNotFoundError: No module named requests"
 
-        first = self.app.issue_match(error_text=query, project_scope="global", session_id="session-rerank", limit=3)
+        first = self.app.issue_match(
+            error_text=query,
+            project_scope="global",
+            session_id="session-rerank",
+            limit=3,
+        )
         self.assertEqual(first["decision"]["status"], "ambiguous")
         self.assertEqual(first["matches"][0]["pattern_id"], 1)
 
@@ -70,7 +77,12 @@ class SessionMemoryTests(unittest.TestCase):
         )
         self.assertEqual(feedback["resolved_candidate"]["pattern_id"], 1)
 
-        second = self.app.issue_match(error_text=query, project_scope="global", session_id="session-rerank", limit=3)
+        second = self.app.issue_match(
+            error_text=query,
+            project_scope="global",
+            session_id="session-rerank",
+            limit=3,
+        )
         self.assertTrue(second["matches"])
         self.assertEqual(second["matches"][0]["pattern_id"], 2)
         self.assertEqual(second["matches"][1]["pattern_id"], 1)
@@ -85,7 +97,12 @@ class SessionMemoryTests(unittest.TestCase):
         self._seed_close_import_patterns()
         query = "ModuleNotFoundError: No module named requests"
 
-        first = self.app.issue_match(error_text=query, project_scope="global", session_id="session-clear", limit=3)
+        first = self.app.issue_match(
+            error_text=query,
+            project_scope="global",
+            session_id="session-clear",
+            limit=3,
+        )
         self.app.issue_feedback(
             retrieval_event_id=first["retrieval_event_id"],
             feedback_type="candidate_rejected",

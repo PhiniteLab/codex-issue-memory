@@ -50,7 +50,9 @@ class Phase01WeakFeedbackLearningTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase01-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -59,7 +61,9 @@ class Phase01WeakFeedbackLearningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_candidate_accepted_updates_variant_stat_with_fractional_weight(self) -> None:
+    def test_candidate_accepted_updates_variant_stat_with_fractional_weight(
+        self,
+    ) -> None:
         stored = _seed_pattern(self.app)
         match = _do_match(self.app)
         stat_before = self.app.store.get_variant_stat(stored["variant_id"])
@@ -82,7 +86,9 @@ class Phase01WeakFeedbackLearningTests(unittest.TestCase):
         alpha_delta = float(stat_after["alpha"]) - float(stat_before["alpha"])
         self.assertAlmostEqual(alpha_delta, 0.35, places=1)
 
-    def test_candidate_rejected_updates_variant_stat_with_fractional_weight(self) -> None:
+    def test_candidate_rejected_updates_variant_stat_with_fractional_weight(
+        self,
+    ) -> None:
         stored = _seed_pattern(self.app)
         match = _do_match(self.app)
         stat_before = self.app.store.get_variant_stat(stored["variant_id"])
@@ -130,7 +136,7 @@ class Phase01WeakFeedbackLearningTests(unittest.TestCase):
         self.assertEqual(stat["failure_count"], 1)
 
     def test_strong_feedback_still_updates_pattern_and_strategy(self) -> None:
-        stored = _seed_pattern(self.app)
+        _seed_pattern(self.app)
         match = _do_match(self.app)
 
         fb = self.app.issue_feedback(
@@ -146,20 +152,39 @@ class Phase01WeakFeedbackLearningTests(unittest.TestCase):
 
     def test_weak_feedback_does_not_update_pattern_or_strategy(self) -> None:
         _seed_pattern(self.app)
-        match = _do_match(self.app)
+        _do_match(self.app)
 
-        for weak_type in ("candidate_accepted", "candidate_rejected", "merge_confirmed", "split_confirmed"):
+        for weak_type in (
+            "candidate_accepted",
+            "candidate_rejected",
+            "merge_confirmed",
+            "split_confirmed",
+        ):
             m = _do_match(self.app, session_id=f"weak-{weak_type}")
             fb = self.app.issue_feedback(
                 retrieval_event_id=m["retrieval_event_id"],
                 feedback_type=weak_type,
                 candidate_rank=1,
             )
-            self.assertFalse(fb["global_update_applied"], msg=f"{weak_type} should not set global_update_applied")
-            self.assertIsNone(fb["pattern_update"], msg=f"{weak_type} should not update pattern")
-            self.assertIsNone(fb["variant_update"], msg=f"{weak_type} should not update variant confidence")
-            self.assertEqual(fb["strategy_stat_updates"], [], msg=f"{weak_type} should not update strategy")
-            self.assertIsNotNone(fb["variant_stat_update"], msg=f"{weak_type} should update variant_stat")
+            self.assertFalse(
+                fb["global_update_applied"],
+                msg=f"{weak_type} should not set global_update_applied",
+            )
+            self.assertIsNone(
+                fb["pattern_update"], msg=f"{weak_type} should not update pattern"
+            )
+            self.assertIsNone(
+                fb["variant_update"],
+                msg=f"{weak_type} should not update variant confidence",
+            )
+            self.assertEqual(
+                fb["strategy_stat_updates"],
+                [],
+                msg=f"{weak_type} should not update strategy",
+            )
+            self.assertIsNotNone(
+                fb["variant_stat_update"], msg=f"{weak_type} should update variant_stat"
+            )
 
 
 class Phase02ProvenScoreTests(unittest.TestCase):
@@ -169,7 +194,9 @@ class Phase02ProvenScoreTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase02-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -192,7 +219,7 @@ class Phase02ProvenScoreTests(unittest.TestCase):
         self.assertIn("proven_score", features)
 
     def test_proven_score_increases_after_verified_feedback(self) -> None:
-        stored = _seed_pattern(self.app)
+        _seed_pattern(self.app)
 
         m1 = _do_match(self.app, session_id="proven-1")
         with self.app.store.managed_connection() as conn:
@@ -222,10 +249,12 @@ class Phase02ProvenScoreTests(unittest.TestCase):
 
     def test_support_score_weight_increased(self) -> None:
         from codex_issue_memory.retrieval.ranker import HeuristicRanker
+
         self.assertEqual(HeuristicRanker.DEFAULT_WEIGHTS["support_score"], 0.05)
 
     def test_proven_score_weight_exists(self) -> None:
         from codex_issue_memory.retrieval.ranker import HeuristicRanker
+
         self.assertEqual(HeuristicRanker.DEFAULT_WEIGHTS["proven_score"], 0.08)
 
 
@@ -236,7 +265,9 @@ class Phase03FeatureOutcomeLogTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase03-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -308,11 +339,17 @@ class Phase03FeatureOutcomeLogTests(unittest.TestCase):
 
     def test_feature_outcome_log_table_created_by_migration(self) -> None:
         with self.app.store.managed_connection() as conn:
-            tables = [r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+            tables = [
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            ]
         self.assertIn("feature_outcome_log", tables)
 
     def test_analyze_feature_importance_command_exists(self) -> None:
         from codex_issue_memory.maintenance import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["analyze-feature-importance"])
         self.assertEqual(args.command, "analyze-feature-importance")

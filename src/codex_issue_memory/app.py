@@ -4,7 +4,13 @@ from typing import Any
 
 from .matching import IssueMatcher
 from .normalization import build_query_profile
-from .services import FeedbackService, GuardrailService, PreferenceService, RecordResolutionService, SessionService
+from .services import (
+    FeedbackService,
+    GuardrailService,
+    PreferenceService,
+    RecordResolutionService,
+    SessionService,
+)
 from .storage import IssueMemoryStore
 
 
@@ -18,7 +24,9 @@ class IssueMemoryApp:
         self.session_service = SessionService(self.store)
         self.record_service = RecordResolutionService(self.store, self.matcher)
         self.preference_service = PreferenceService(self.store)
-        self.feedback_service = FeedbackService(self.store, self.session_service, self.preference_service)
+        self.feedback_service = FeedbackService(
+            self.store, self.session_service, self.preference_service
+        )
         self.guardrail_service = GuardrailService(self.store, self.matcher)
 
     def issue_match(
@@ -37,7 +45,9 @@ class IssueMemoryApp:
         user_scope: str = "",
         limit: int = 3,
     ) -> dict[str, Any]:
-        resolved_user_scope = user_scope.strip() or self.store.settings.default_user_scope
+        resolved_user_scope = (
+            user_scope.strip() or self.store.settings.default_user_scope
+        )
         profile = build_query_profile(
             error_text=error_text,
             context=context,
@@ -56,7 +66,9 @@ class IssueMemoryApp:
         active_experiment = self.store.get_active_experiment()
         if active_experiment and session_id:
             experiment_id = str(active_experiment.get("experiment_id", ""))
-            experiment_arm = self.store.assign_experiment_arm(active_experiment, session_id)
+            experiment_arm = self.store.assign_experiment_arm(
+                active_experiment, session_id
+            )
         matches, decision, event_meta = self.matcher.match_with_decision(
             profile,
             project_scope=project_scope,
@@ -106,7 +118,10 @@ class IssueMemoryApp:
         # Top contributing signals: features sorted by absolute weighted contribution
         signal_entries = []
         for name, value in features.items():
-            if name.startswith("_") or name in ("base_score", "strategy_bandit_final_score"):
+            if name.startswith("_") or name in (
+                "base_score",
+                "strategy_bandit_final_score",
+            ):
                 continue
             if abs(value) > 1e-6:
                 signal_entries.append((abs(value), f"{name} ({value:+.3f})"))
@@ -115,13 +130,17 @@ class IssueMemoryApp:
 
         # Session memory info
         session_info: dict[str, Any] = {}
-        session_penalty = features.get("session_penalty", 0.0) or features.get("session_penalty_score", 0.0)
+        session_penalty = features.get("session_penalty", 0.0) or features.get(
+            "session_penalty_score", 0.0
+        )
         session_boost = features.get("session_boost", 0.0)
         if session_penalty:
             session_info["penalty"] = round(float(session_penalty), 4)
         if session_boost:
             session_info["boost"] = round(float(session_boost), 4)
-        session_reasons = [r for r in reasons if "session" in r.lower() or "rejected" in r.lower()]
+        session_reasons = [
+            r for r in reasons if "session" in r.lower() or "rejected" in r.lower()
+        ]
         if session_reasons:
             session_info["reasons"] = session_reasons
 
@@ -137,7 +156,13 @@ class IssueMemoryApp:
         neg_penalty = features.get("negative_applicability_penalty", 0.0)
         if neg_penalty:
             bandit_info["negative_applicability_penalty"] = round(float(neg_penalty), 4)
-        bandit_reasons = [r for r in reasons if "bandit" in r.lower() or "strategy" in r.lower() or "negative-applicability" in r.lower()]
+        bandit_reasons = [
+            r
+            for r in reasons
+            if "bandit" in r.lower()
+            or "strategy" in r.lower()
+            or "negative-applicability" in r.lower()
+        ]
         if bandit_reasons:
             bandit_info["reasons"] = bandit_reasons
 
@@ -303,7 +328,9 @@ class IssueMemoryApp:
     def issue_metrics(self, *, window_days: int = 30) -> dict[str, Any]:
         return self.store.metrics_summary(window_days=window_days)
 
-    def issue_review_queue(self, *, status: str = "pending", limit: int = 20) -> dict[str, Any]:
+    def issue_review_queue(
+        self, *, status: str = "pending", limit: int = 20
+    ) -> dict[str, Any]:
         rows = self.store.list_review_queue(status=status, limit=limit)
         return {
             "status": status or "all",
@@ -311,13 +338,19 @@ class IssueMemoryApp:
             "items": rows,
         }
 
-    def issue_review_resolve(self, *, review_id: int, decision: str, note: str = "") -> dict[str, Any]:
-        item = self.store.resolve_review_item(review_id=review_id, decision=decision, note=note)
+    def issue_review_resolve(
+        self, *, review_id: int, decision: str, note: str = ""
+    ) -> dict[str, Any]:
+        item = self.store.resolve_review_item(
+            review_id=review_id, decision=decision, note=note
+        )
         if item is None:
             return {"found": False, "review_id": review_id}
         return {"found": True, "item": item}
 
-    def issue_get(self, *, pattern_id: int, include_examples: bool = True, examples_limit: int = 5) -> dict[str, Any]:
+    def issue_get(
+        self, *, pattern_id: int, include_examples: bool = True, examples_limit: int = 5
+    ) -> dict[str, Any]:
         bundle = self.store.get_pattern(
             pattern_id,
             include_examples=include_examples,
@@ -337,7 +370,9 @@ class IssueMemoryApp:
             "episodes": bundle.episodes,
         }
 
-    def issue_recent(self, *, limit: int = 5, project_scope: str = "") -> dict[str, Any]:
+    def issue_recent(
+        self, *, limit: int = 5, project_scope: str = ""
+    ) -> dict[str, Any]:
         rows = self.store.recent_patterns(limit=limit, project_scope=project_scope)
         compact = [
             {
@@ -353,8 +388,21 @@ class IssueMemoryApp:
         ]
         return {"patterns": compact}
 
-    def issue_search(self, *, query: str, project_scope: str = "", limit: int = 5, session_id: str = "") -> dict[str, Any]:
-        rows, event_meta = self.matcher.search(query=query, project_scope=project_scope, limit=limit, session_id=session_id, log_event=True)
+    def issue_search(
+        self,
+        *,
+        query: str,
+        project_scope: str = "",
+        limit: int = 5,
+        session_id: str = "",
+    ) -> dict[str, Any]:
+        rows, event_meta = self.matcher.search(
+            query=query,
+            project_scope=project_scope,
+            limit=limit,
+            session_id=session_id,
+            log_event=True,
+        )
         compact = [
             {
                 "pattern_id": row.pattern_id,

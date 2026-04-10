@@ -22,7 +22,10 @@ except ImportError:  # pragma: no cover - exercised in lightweight test environm
             return decorator
 
         def run(self) -> None:
-            raise RuntimeError("The 'mcp' package is required to run the issue-memory MCP server.")
+            raise RuntimeError(
+                "The 'mcp' package is required to run the issue-memory MCP server."
+            )
+
 
 from .app import IssueMemoryApp
 from .lifecycle import MCPServerLifecycle, MCPServerOwnerConflict
@@ -253,13 +256,21 @@ def issue_review_queue(status: str = "pending", limit: int = 20) -> dict:
 @mcp.tool()
 def issue_review_resolve(review_id: int, decision: str, note: str = "") -> dict:
     """Resolve a review queue item and activate or archive its provisional variant."""
-    return get_app().issue_review_resolve(review_id=review_id, decision=decision, note=note)
+    return get_app().issue_review_resolve(
+        review_id=review_id, decision=decision, note=note
+    )
 
 
 @mcp.tool()
-def issue_get(pattern_id: int, include_examples: bool = True, examples_limit: int = 5) -> dict:
+def issue_get(
+    pattern_id: int, include_examples: bool = True, examples_limit: int = 5
+) -> dict:
     """Return the full stored details for one issue pattern, including variants and episodes."""
-    return get_app().issue_get(pattern_id=pattern_id, include_examples=include_examples, examples_limit=examples_limit)
+    return get_app().issue_get(
+        pattern_id=pattern_id,
+        include_examples=include_examples,
+        examples_limit=examples_limit,
+    )
 
 
 @mcp.tool()
@@ -269,9 +280,13 @@ def issue_recent(limit: int = 5, project_scope: str = "") -> dict:
 
 
 @mcp.tool()
-def issue_search(query: str, project_scope: str = "", limit: int = 5, session_id: str = "") -> dict:
+def issue_search(
+    query: str, project_scope: str = "", limit: int = 5, session_id: str = ""
+) -> dict:
     """Keyword search across stored issue patterns."""
-    return get_app().issue_search(query=query, project_scope=project_scope, limit=limit, session_id=session_id)
+    return get_app().issue_search(
+        query=query, project_scope=project_scope, limit=limit, session_id=session_id
+    )
 
 
 def main() -> None:

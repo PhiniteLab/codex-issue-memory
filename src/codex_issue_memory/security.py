@@ -15,7 +15,10 @@ _SECRET_VALUE_RE = re.compile(
 
 _TEXT_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.IGNORECASE | re.DOTALL),
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+            re.IGNORECASE | re.DOTALL,
+        ),
         "[REDACTED_PRIVATE_KEY]",
     ),
     (re.compile(r"(?i)(\bbearer\s+)([A-Za-z0-9\-\._~\+/=]+)"), r"\1[REDACTED]"),
@@ -62,7 +65,10 @@ def _redact_text(text: str) -> str:
 
 def _redact_value(value: Any) -> Any:
     if isinstance(value, dict):
-        return {str(key): _redact_by_key(str(key), subvalue) for key, subvalue in value.items()}
+        return {
+            str(key): _redact_by_key(str(key), subvalue)
+            for key, subvalue in value.items()
+        }
     if isinstance(value, list):
         return [_redact_value(item) for item in value]
     if isinstance(value, str):
@@ -98,5 +104,6 @@ def sanitize_json_text(text: str, *, enabled: bool = True, max_chars: int = 0) -
     except (TypeError, ValueError, json.JSONDecodeError):
         return sanitize_text(normalized, enabled=enabled, max_chars=max_chars)
     redacted = _redact_value(payload)
-    return _truncate_text(json.dumps(redacted, ensure_ascii=False, sort_keys=True), max_chars=max_chars)
-
+    return _truncate_text(
+        json.dumps(redacted, ensure_ascii=False, sort_keys=True), max_chars=max_chars
+    )

@@ -32,7 +32,9 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-p5om-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -67,7 +69,9 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
             file_path="loader.py",
         )
 
-    def _match_and_get_event(self, error_text: str = "FileNotFoundError: db.sqlite3") -> dict[str, Any]:
+    def _match_and_get_event(
+        self, error_text: str = "FileNotFoundError: db.sqlite3"
+    ) -> dict[str, Any]:
         return self.app.issue_match(
             error_text=error_text,
             command="python main.py",
@@ -115,7 +119,11 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
                 "SELECT retrieval_latency_ms, ranking_latency_ms, decision_latency_ms FROM retrieval_events LIMIT 1"
             ).fetchone()
         self.assertIsNotNone(row)
-        for col in ("retrieval_latency_ms", "ranking_latency_ms", "decision_latency_ms"):
+        for col in (
+            "retrieval_latency_ms",
+            "ranking_latency_ms",
+            "decision_latency_ms",
+        ):
             self.assertIsInstance(row[col], int)
 
     # ── 5.3 Degradation alarm ─────────────────────────────────────
@@ -167,7 +175,9 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
                 candidate_rank=1,
                 notes=f"fp-{i}",
             )
-            self.assertEqual(result["status"], "ok", f"FP #{i} should be applied normally")
+            self.assertEqual(
+                result["status"], "ok", f"FP #{i} should be applied normally"
+            )
 
         # 4th FP should be batched
         match = self._match_and_get_event()
@@ -194,7 +204,9 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
                 feedback_type="false_positive",
                 candidate_rank=1,
             )
-            self.assertEqual(result["status"], "ok", "All FPs should pass when window=0")
+            self.assertEqual(
+                result["status"], "ok", "All FPs should pass when window=0"
+            )
 
     def test_flush_feedback_batch(self) -> None:
         """Enqueued items can be flushed (applied)."""

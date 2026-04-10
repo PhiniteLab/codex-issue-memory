@@ -34,9 +34,18 @@ class GuardrailService:
         user_scope: str = "",
         limit: int = 5,
     ) -> dict[str, Any]:
-        resolved_user_scope = user_scope.strip() or self.store.settings.default_user_scope
+        resolved_user_scope = (
+            user_scope.strip() or self.store.settings.default_user_scope
+        )
         normalized_project_scope = project_scope.strip() or "global"
-        seed_text = error_text.strip() or context.strip() or command.strip() or file_path.strip() or repo_name.strip() or "proactive guardrail scan"
+        seed_text = (
+            error_text.strip()
+            or context.strip()
+            or command.strip()
+            or file_path.strip()
+            or repo_name.strip()
+            or "proactive guardrail scan"
+        )
         profile = build_query_profile(
             error_text=seed_text,
             context=context,
@@ -54,7 +63,11 @@ class GuardrailService:
             retrieval_context="guardrail",
         )
         preference_rules = (
-            self.store.load_matching_preference_rules(profile=profile, project_scope=normalized_project_scope, limit=max(limit * 2, 10))
+            self.store.load_matching_preference_rules(
+                profile=profile,
+                project_scope=normalized_project_scope,
+                limit=max(limit * 2, 10),
+            )
             if self.store.settings.enable_preference_rules
             else []
         )
@@ -65,7 +78,9 @@ class GuardrailService:
             strategy_key = str(rule.get("strategy_key", "")).strip()
             if not strategy_key:
                 continue
-            contribution = float(rule.get("weight", 0.0)) * float(rule.get("match_score", 0.0))
+            contribution = float(rule.get("weight", 0.0)) * float(
+                rule.get("match_score", 0.0)
+            )
             if contribution >= 0.0:
                 preferred[strategy_key] += contribution
             else:
@@ -84,11 +99,18 @@ class GuardrailService:
             seen_pairs.add(pair)
             strategy_key = str(variant.get("strategy_key", "")).strip()
             prevention_rule = str(candidate.get("prevention_rule", "")).strip()
-            verification_steps = str(variant.get("verification_steps") or candidate.get("verification_steps", "")).strip()
-            canonical_fix = str(variant.get("canonical_fix") or candidate.get("canonical_fix", "")).strip()
+            verification_steps = str(
+                variant.get("verification_steps")
+                or candidate.get("verification_steps", "")
+            ).strip()
+            canonical_fix = str(
+                variant.get("canonical_fix") or candidate.get("canonical_fix", "")
+            ).strip()
             if not prevention_rule and not verification_steps and not canonical_fix:
                 continue
-            preference_alignment = round(preferred.get(strategy_key, 0.0) - avoided.get(strategy_key, 0.0), 4)
+            preference_alignment = round(
+                preferred.get(strategy_key, 0.0) - avoided.get(strategy_key, 0.0), 4
+            )
             guardrails.append(
                 {
                     "pattern_id": pattern_id,
@@ -123,11 +145,15 @@ class GuardrailService:
         ]
         preferred_strategies = [
             {"strategy_key": key, "score": round(value, 4)}
-            for key, value in sorted(preferred.items(), key=lambda item: (-item[1], item[0]))[: max(limit, 1)]
+            for key, value in sorted(
+                preferred.items(), key=lambda item: (-item[1], item[0])
+            )[: max(limit, 1)]
         ]
         avoided_strategies = [
             {"strategy_key": key, "score": round(value, 4)}
-            for key, value in sorted(avoided.items(), key=lambda item: (-item[1], item[0]))[: max(limit, 1)]
+            for key, value in sorted(
+                avoided.items(), key=lambda item: (-item[1], item[0])
+            )[: max(limit, 1)]
         ]
 
         if guardrails:

@@ -61,7 +61,9 @@ class BackupManager:
         except (TypeError, ValueError, json.JSONDecodeError):
             return None
 
-    def _write_manifest(self, sqlite_path: Path, *, digest: str, created_at_utc: str) -> dict[str, Any]:
+    def _write_manifest(
+        self, sqlite_path: Path, *, digest: str, created_at_utc: str
+    ) -> dict[str, Any]:
         manifest = {
             "created_at_utc": created_at_utc,
             "source_db": str(self.settings.db_path),
@@ -105,11 +107,16 @@ class BackupManager:
             self.settings.windows_backup_target.mkdir(parents=True, exist_ok=True)
             mirror_path = self.settings.windows_backup_target / local_path.name
             shutil.copy2(local_path, mirror_path)
-            shutil.copy2(self._manifest_path(local_path), self._manifest_path(mirror_path))
+            shutil.copy2(
+                self._manifest_path(local_path), self._manifest_path(mirror_path)
+            )
 
         self._prune(self.settings.backup_dir, keep=self.settings.local_backup_keep)
         if self.settings.windows_backup_target:
-            self._prune(self.settings.windows_backup_target, keep=self.settings.mirror_backup_keep)
+            self._prune(
+                self.settings.windows_backup_target,
+                keep=self.settings.mirror_backup_keep,
+            )
 
         return BackupResult(
             local_path=str(local_path),
@@ -162,7 +169,9 @@ class BackupManager:
             "schema": (manifest or {}).get("schema"),
         }
 
-    def restore_backup(self, backup_path: str | Path, *, create_safety_backup: bool = True) -> dict[str, Any]:
+    def restore_backup(
+        self, backup_path: str | Path, *, create_safety_backup: bool = True
+    ) -> dict[str, Any]:
         self.settings.ensure_dirs()
         sqlite_path = Path(backup_path).expanduser()
         if sqlite_path.suffix.lower() == ".json":
@@ -198,12 +207,18 @@ class BackupManager:
             "status": "ok",
             "restored_from": str(sqlite_path),
             "schema": schema,
-            "safety_backup": safety_backup.to_dict() if safety_backup is not None else None,
+            "safety_backup": safety_backup.to_dict()
+            if safety_backup is not None
+            else None,
         }
 
     @staticmethod
     def _prune(directory: Path, *, keep: int) -> None:
-        sqlite_files = sorted(directory.glob("issue_memory_*.sqlite3"), key=lambda p: p.stat().st_mtime, reverse=True)
+        sqlite_files = sorted(
+            directory.glob("issue_memory_*.sqlite3"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
         for old_file in sqlite_files[keep:]:
             json_path = old_file.with_suffix(".json")
             try:

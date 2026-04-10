@@ -30,7 +30,9 @@ class Phase5OperationsTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase5-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -47,7 +49,9 @@ class Phase5OperationsTests(unittest.TestCase):
             else:
                 os.environ[key] = value
 
-    def _store_basic_resolution(self, *, title: str = "Relative sqlite path breaks outside repo root") -> dict[str, Any]:
+    def _store_basic_resolution(
+        self, *, title: str = "Relative sqlite path breaks outside repo root"
+    ) -> dict[str, Any]:
         return self.app.issue_record_resolution(
             title=title,
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -117,7 +121,11 @@ class Phase5OperationsTests(unittest.TestCase):
             reasons=["manual-review-required"],
             requires_review=True,
         )
-        with mock.patch.object(self.app.record_service.consolidation_service, "plan", return_value=forced_plan):
+        with mock.patch.object(
+            self.app.record_service.consolidation_service,
+            "plan",
+            return_value=forced_plan,
+        ):
             stored = self.app.issue_record_resolution(
                 title="Needs review before activation",
                 raw_error="ValueError: suspicious consolidation candidate",
@@ -141,7 +149,9 @@ class Phase5OperationsTests(unittest.TestCase):
         self.assertEqual(bundle_before["variants"][0]["status"], "provisional")
         self.assertEqual(bundle_before["episodes"][0]["consolidation_status"], "review")
 
-        resolved = self.app.issue_review_resolve(review_id=int(item["id"]), decision="approve", note="Looks reusable.")
+        resolved = self.app.issue_review_resolve(
+            review_id=int(item["id"]), decision="approve", note="Looks reusable."
+        )
         self.assertTrue(resolved["found"])
         self.assertEqual(resolved["item"]["status"], "approved")
 
@@ -151,7 +161,9 @@ class Phase5OperationsTests(unittest.TestCase):
             examples_limit=5,
         )
         self.assertEqual(bundle_after["variants"][0]["status"], "active")
-        self.assertEqual(bundle_after["episodes"][0]["consolidation_status"], "attached")
+        self.assertEqual(
+            bundle_after["episodes"][0]["consolidation_status"], "attached"
+        )
 
     def test_backup_restore_rewinds_database(self) -> None:
         first = self._store_basic_resolution(title="First restorable issue")
@@ -174,10 +186,20 @@ class Phase5OperationsTests(unittest.TestCase):
         self.assertEqual(restored["status"], "ok")
 
         app_after = IssueMemoryApp()
-        self.assertTrue(app_after.issue_get(pattern_id=self._require_int(first["pattern_id"]))["found"])
-        self.assertFalse(app_after.issue_get(pattern_id=self._require_int(second["pattern_id"]))["found"])
+        self.assertTrue(
+            app_after.issue_get(pattern_id=self._require_int(first["pattern_id"]))[
+                "found"
+            ]
+        )
+        self.assertFalse(
+            app_after.issue_get(pattern_id=self._require_int(second["pattern_id"]))[
+                "found"
+            ]
+        )
 
-    def test_prune_operational_data_deletes_old_telemetry_and_resolved_reviews(self) -> None:
+    def test_prune_operational_data_deletes_old_telemetry_and_resolved_reviews(
+        self,
+    ) -> None:
         forced_plan = ConsolidationPlan(
             matched_pattern_id=None,
             matched_variant_id=None,
@@ -190,7 +212,11 @@ class Phase5OperationsTests(unittest.TestCase):
             reasons=["manual-review-required"],
             requires_review=True,
         )
-        with mock.patch.object(self.app.record_service.consolidation_service, "plan", return_value=forced_plan):
+        with mock.patch.object(
+            self.app.record_service.consolidation_service,
+            "plan",
+            return_value=forced_plan,
+        ):
             stored = self.app.issue_record_resolution(
                 title="Retention review issue",
                 raw_error="ValueError: retention review candidate",
@@ -202,7 +228,9 @@ class Phase5OperationsTests(unittest.TestCase):
             )
         queue = self.app.issue_review_queue(status="pending", limit=5)
         review_id = int(queue["items"][0]["id"])
-        self.app.issue_review_resolve(review_id=review_id, decision="approve", note="done")
+        self.app.issue_review_resolve(
+            review_id=review_id, decision="approve", note="done"
+        )
 
         match = self.app.issue_match(
             error_text="ValueError: retention review candidate",
@@ -213,19 +241,34 @@ class Phase5OperationsTests(unittest.TestCase):
         )
         self.assertIsNotNone(match["retrieval_event_id"])
 
-        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=400)).replace(microsecond=0).isoformat()
+        old_timestamp = (
+            (datetime.now(timezone.utc) - timedelta(days=400))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.app.store.managed_connection(immediate=True) as conn:
             conn.execute("UPDATE retrieval_events SET created_at = ?", (old_timestamp,))
-            conn.execute("UPDATE retrieval_candidates SET created_at = ?", (old_timestamp,))
-            conn.execute("UPDATE review_queue SET resolved_at = ?, created_at = ? WHERE id = ?", (old_timestamp, old_timestamp, review_id))
+            conn.execute(
+                "UPDATE retrieval_candidates SET created_at = ?", (old_timestamp,)
+            )
+            conn.execute(
+                "UPDATE review_queue SET resolved_at = ?, created_at = ? WHERE id = ?",
+                (old_timestamp, old_timestamp, review_id),
+            )
 
-        pruned = self.app.store.prune_operational_data(telemetry_retention_days=30, resolved_review_retention_days=30)
+        pruned = self.app.store.prune_operational_data(
+            telemetry_retention_days=30, resolved_review_retention_days=30
+        )
         self.assertGreaterEqual(pruned["retrieval_events_deleted"], 1)
         self.assertGreaterEqual(pruned["resolved_reviews_deleted"], 1)
 
         queue_after = self.app.issue_review_queue(status="approved", limit=5)
         self.assertEqual(queue_after["count"], 0)
-        bundle = self.app.issue_get(pattern_id=int(stored["pattern_id"]), include_examples=True, examples_limit=5)
+        bundle = self.app.issue_get(
+            pattern_id=int(stored["pattern_id"]),
+            include_examples=True,
+            examples_limit=5,
+        )
         self.assertTrue(bundle["found"])
 
 

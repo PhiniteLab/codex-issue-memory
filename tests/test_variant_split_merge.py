@@ -14,7 +14,9 @@ class VariantSplitMergeTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-variants-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -23,9 +25,13 @@ class VariantSplitMergeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_same_pattern_creates_distinct_variants_without_overwriting_pattern_fix(self) -> None:
+    def test_same_pattern_creates_distinct_variants_without_overwriting_pattern_fix(
+        self,
+    ) -> None:
         first_fix = "Move optimizer state tensors onto the active CUDA device after checkpoint resume."
-        second_fix = "Move each dataloader batch to the model device before the forward pass."
+        second_fix = (
+            "Move each dataloader batch to the model device before the forward pass."
+        )
 
         first = self.app.issue_record_resolution(
             title="PyTorch tensors on mixed devices",
@@ -72,7 +78,9 @@ class VariantSplitMergeTests(unittest.TestCase):
         self.assertEqual(second["variant_action"], "created")
         self.assertEqual(second["action"], "updated")
 
-        bundle = self.app.issue_get(pattern_id=first["pattern_id"], include_examples=True, examples_limit=10)
+        bundle = self.app.issue_get(
+            pattern_id=first["pattern_id"], include_examples=True, examples_limit=10
+        )
         self.assertEqual(bundle["pattern"]["canonical_fix"], first_fix)
         self.assertEqual(len(bundle["variants"]), 2)
         self.assertEqual(len(bundle["episodes"]), 2)
@@ -80,7 +88,9 @@ class VariantSplitMergeTests(unittest.TestCase):
         self.assertIn(first_fix, variant_fixes)
         self.assertIn(second_fix, variant_fixes)
 
-    def test_repeating_same_variant_updates_existing_variant_instead_of_duplicating(self) -> None:
+    def test_repeating_same_variant_updates_existing_variant_instead_of_duplicating(
+        self,
+    ) -> None:
         first = self.app.issue_record_resolution(
             title="Relative sqlite path breaks outside repo root",
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -118,12 +128,16 @@ class VariantSplitMergeTests(unittest.TestCase):
         self.assertEqual(first["variant_id"], second["variant_id"])
         self.assertEqual(second["variant_action"], "updated")
 
-        bundle = self.app.issue_get(pattern_id=first["pattern_id"], include_examples=True, examples_limit=10)
+        bundle = self.app.issue_get(
+            pattern_id=first["pattern_id"], include_examples=True, examples_limit=10
+        )
         self.assertEqual(len(bundle["variants"]), 1)
         self.assertEqual(bundle["variants"][0]["times_used"], 2)
         self.assertEqual(bundle["pattern"]["times_seen"], 2)
 
-    def test_atomic_record_resolution_rolls_back_everything_on_episode_failure(self) -> None:
+    def test_atomic_record_resolution_rolls_back_everything_on_episode_failure(
+        self,
+    ) -> None:
         with mock.patch.object(
             self.app.store,
             "_insert_episode_tx",
@@ -147,10 +161,18 @@ class VariantSplitMergeTests(unittest.TestCase):
                 )
 
         with self.app.store.managed_connection() as conn:
-            pattern_count = conn.execute("SELECT COUNT(*) AS count FROM issue_patterns").fetchone()["count"]
-            variant_count = conn.execute("SELECT COUNT(*) AS count FROM issue_variants").fetchone()["count"]
-            episode_count = conn.execute("SELECT COUNT(*) AS count FROM issue_episodes").fetchone()["count"]
-            example_count = conn.execute("SELECT COUNT(*) AS count FROM issue_examples").fetchone()["count"]
+            pattern_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM issue_patterns"
+            ).fetchone()["count"]
+            variant_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM issue_variants"
+            ).fetchone()["count"]
+            episode_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM issue_episodes"
+            ).fetchone()["count"]
+            example_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM issue_examples"
+            ).fetchone()["count"]
 
         self.assertEqual(pattern_count, 0)
         self.assertEqual(variant_count, 0)

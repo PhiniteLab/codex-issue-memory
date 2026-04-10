@@ -4,7 +4,12 @@ from typing import Any
 
 from ..matching import IssueMatcher
 from ..retrieval import DenseEmbeddingIndex
-from ..normalization import build_query_profile, derive_strategy_key, infer_strategy_hints, parse_tag_string
+from ..normalization import (
+    build_query_profile,
+    derive_strategy_key,
+    infer_strategy_hints,
+    parse_tag_string,
+)
 from ..storage import IssueMemoryStore
 from ..security import sanitize_json_text, sanitize_text
 from .consolidation_service import ConsolidationService
@@ -49,9 +54,15 @@ class RecordResolutionService:
         patch_hash: str = "",
     ) -> dict[str, Any]:
         extra_tags = parse_tag_string(tags)
-        sanitized_raw_error = sanitize_text(raw_error, enabled=self.store.settings.enable_redaction, max_chars=8000)
-        sanitized_context = sanitize_text(context, enabled=self.store.settings.enable_redaction, max_chars=8000)
-        sanitized_stack_excerpt = sanitize_text(stack_excerpt, enabled=self.store.settings.enable_redaction, max_chars=4000)
+        sanitized_raw_error = sanitize_text(
+            raw_error, enabled=self.store.settings.enable_redaction, max_chars=8000
+        )
+        sanitized_context = sanitize_text(
+            context, enabled=self.store.settings.enable_redaction, max_chars=8000
+        )
+        sanitized_stack_excerpt = sanitize_text(
+            stack_excerpt, enabled=self.store.settings.enable_redaction, max_chars=4000
+        )
         sanitized_env_json = sanitize_json_text(
             env_json,
             enabled=self.store.settings.enable_redaction,
@@ -95,7 +106,9 @@ class RecordResolutionService:
             command,
             file_path,
         )
-        strategy_hints = list(dict.fromkeys(profile.strategy_hints + resolution_strategy_hints))
+        strategy_hints = list(
+            dict.fromkeys(profile.strategy_hints + resolution_strategy_hints)
+        )
         strategy_key = derive_strategy_key(
             canonical_fix,
             prevention_rule,
@@ -192,7 +205,9 @@ class RecordResolutionService:
                 "verification_command": verification_command.strip(),
                 "verification_output": sanitized_verification_output,
                 "outcome": "verified",
-                "consolidation_status": "review" if plan.requires_review else "attached",
+                "consolidation_status": "review"
+                if plan.requires_review
+                else "attached",
                 "resolution_notes": sanitized_resolution_notes,
             },
             example_payload={
@@ -209,7 +224,9 @@ class RecordResolutionService:
                     "user_scope": profile.user_scope,
                     "repo_name": repo_name,
                     "strategy_key": strategy_key,
-                    "review_reason": ", ".join(plan.reasons) if plan.reasons else plan.match_strategy,
+                    "review_reason": ", ".join(plan.reasons)
+                    if plan.reasons
+                    else plan.match_strategy,
                     "entity_slots": profile.entity_slots,
                     "metadata": {
                         "matched_pattern_id": plan.matched_pattern_id,

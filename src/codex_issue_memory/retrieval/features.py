@@ -89,7 +89,9 @@ def _best_row_overlap(
     best_score = 0.0
     best_tokens: list[str] = []
     for row in rows:
-        row_tokens = tokenize(" ".join(str(row.get(field, "")) for field in fields), max_tokens=max_tokens)
+        row_tokens = tokenize(
+            " ".join(str(row.get(field, "")) for field in fields), max_tokens=max_tokens
+        )
         overlap_score, overlap_tokens = _token_overlap_score(profile_tokens, row_tokens)
         if overlap_score > best_score:
             best_score = overlap_score
@@ -139,14 +141,22 @@ def _prioritize_reasons(reasons: list[str], *, limit: int = 12) -> list[str]:
 
     return prioritized[:limit]
 
+
 def _feedback_score(candidate: dict[str, Any], variant: dict[str, Any]) -> float:
     variant_success = int(variant.get("success_count", 0))
     variant_reject = int(variant.get("reject_count", 0))
     confidence = float(variant.get("confidence", candidate.get("confidence", 0.5)))
     memory_strength = float(variant.get("memory_strength", 0.5))
-    success_ratio = (variant_success + 1.0) / max(variant_success + variant_reject + 2.0, 1.0)
+    success_ratio = (variant_success + 1.0) / max(
+        variant_success + variant_reject + 2.0, 1.0
+    )
     reject_ratio = variant_reject / max(variant_success + variant_reject + 1.0, 1.0)
-    return _clamp(0.42 * confidence + 0.33 * memory_strength + 0.25 * success_ratio - 0.22 * reject_ratio)
+    return _clamp(
+        0.42 * confidence
+        + 0.33 * memory_strength
+        + 0.25 * success_ratio
+        - 0.22 * reject_ratio
+    )
 
 
 def build_candidate_features(
@@ -164,12 +174,18 @@ def build_candidate_features(
         reasons.append(scope_reason)
 
     family_score = 0.0
-    if profile.error_family != "generic_runtime_error" and candidate.get("error_family") == profile.error_family:
+    if (
+        profile.error_family != "generic_runtime_error"
+        and candidate.get("error_family") == profile.error_family
+    ):
         family_score = 1.0
         reasons.append("same-error-family")
 
     root_score = 0.0
-    if profile.root_cause_class != "unknown" and candidate.get("root_cause_class") == profile.root_cause_class:
+    if (
+        profile.root_cause_class != "unknown"
+        and candidate.get("root_cause_class") == profile.root_cause_class
+    ):
         root_score = 1.0
         reasons.append("same-root-cause")
 
@@ -178,7 +194,11 @@ def build_candidate_features(
         variant = {}
 
     raw_variant_tags = variant.get("tags_json")
-    variant_tags = [str(tag) for tag in raw_variant_tags] if isinstance(raw_variant_tags, list) else []
+    variant_tags = (
+        [str(tag) for tag in raw_variant_tags]
+        if isinstance(raw_variant_tags, list)
+        else []
+    )
     candidate_tags = tokenize(
         str(candidate.get("tags", "")) + " " + " ".join(variant_tags),
         max_tokens=32,
@@ -202,7 +222,9 @@ def build_candidate_features(
         max_tokens=160,
     )
 
-    text_overlap, text_tokens = _token_overlap_score(profile.tokens, candidate_text_tokens)
+    text_overlap, text_tokens = _token_overlap_score(
+        profile.tokens, candidate_text_tokens
+    )
     if text_overlap > 0:
         reasons.append("text-overlap:" + ",".join(text_tokens[:4]))
 
@@ -210,17 +232,34 @@ def build_candidate_features(
     if tag_overlap > 0:
         reasons.append("tag-overlap:" + ",".join(tag_tokens[:4]))
 
-    exception_overlap, exception_tokens = _token_overlap_score(profile.exception_types, candidate_text_tokens + candidate_tags)
+    exception_overlap, exception_tokens = _token_overlap_score(
+        profile.exception_types, candidate_text_tokens + candidate_tags
+    )
     if exception_overlap > 0:
         reasons.append("exception-overlap:" + ",".join(exception_tokens[:3]))
 
-    examples = candidate.get("examples", []) if isinstance(candidate.get("examples"), list) else []
-    episodes = candidate.get("episodes", []) if isinstance(candidate.get("episodes"), list) else []
+    examples = (
+        candidate.get("examples", [])
+        if isinstance(candidate.get("examples"), list)
+        else []
+    )
+    episodes = (
+        candidate.get("episodes", [])
+        if isinstance(candidate.get("episodes"), list)
+        else []
+    )
 
     best_example_overlap, best_example_tokens = _best_row_overlap(
         profile.tokens,
         examples,
-        ("raw_error", "normalized_error", "context", "command", "file_path", "verified_fix"),
+        (
+            "raw_error",
+            "normalized_error",
+            "context",
+            "command",
+            "file_path",
+            "verified_fix",
+        ),
         max_tokens=72,
     )
     if best_example_overlap > 0:
@@ -229,25 +268,60 @@ def build_candidate_features(
     best_episode_overlap, best_episode_tokens = _best_row_overlap(
         profile.tokens,
         episodes,
-        ("raw_error", "normalized_error", "context", "stack_excerpt", "command", "file_path", "patch_summary", "resolution_notes"),
+        (
+            "raw_error",
+            "normalized_error",
+            "context",
+            "stack_excerpt",
+            "command",
+            "file_path",
+            "patch_summary",
+            "resolution_notes",
+        ),
         max_tokens=88,
     )
     if best_episode_overlap > 0:
         reasons.append("episode-overlap:" + ",".join(best_episode_tokens))
 
-    best_command_overlap, best_command_tokens = _best_row_overlap(profile.command_tokens, examples, ("command",), max_tokens=24)
-    episode_command_overlap, episode_command_tokens = _best_row_overlap(profile.command_tokens, episodes, ("command",), max_tokens=24)
+    best_command_overlap, best_command_tokens = _best_row_overlap(
+        profile.command_tokens, examples, ("command",), max_tokens=24
+    )
+    episode_command_overlap, episode_command_tokens = _best_row_overlap(
+        profile.command_tokens, episodes, ("command",), max_tokens=24
+    )
     if episode_command_overlap > best_command_overlap:
-        best_command_overlap, best_command_tokens = episode_command_overlap, episode_command_tokens
+        best_command_overlap, best_command_tokens = (
+            episode_command_overlap,
+            episode_command_tokens,
+        )
 
-    best_path_overlap, best_path_tokens = _best_row_overlap(profile.path_tokens, examples, ("file_path",), max_tokens=24)
-    episode_path_overlap, episode_path_tokens = _best_row_overlap(profile.path_tokens, episodes, ("file_path",), max_tokens=24)
+    best_path_overlap, best_path_tokens = _best_row_overlap(
+        profile.path_tokens, examples, ("file_path",), max_tokens=24
+    )
+    episode_path_overlap, episode_path_tokens = _best_row_overlap(
+        profile.path_tokens, episodes, ("file_path",), max_tokens=24
+    )
     if episode_path_overlap > best_path_overlap:
         best_path_overlap, best_path_tokens = episode_path_overlap, episode_path_tokens
 
-    variant_command_overlap = 1.0 if profile.command_signature and variant.get("command_signature") == profile.command_signature else 0.0
-    variant_path_overlap = 1.0 if profile.path_signature and variant.get("file_path_signature") == profile.path_signature else 0.0
-    variant_stack_overlap = 1.0 if profile.stack_signature and variant.get("stack_signature") == profile.stack_signature else 0.0
+    variant_command_overlap = (
+        1.0
+        if profile.command_signature
+        and variant.get("command_signature") == profile.command_signature
+        else 0.0
+    )
+    variant_path_overlap = (
+        1.0
+        if profile.path_signature
+        and variant.get("file_path_signature") == profile.path_signature
+        else 0.0
+    )
+    variant_stack_overlap = (
+        1.0
+        if profile.stack_signature
+        and variant.get("stack_signature") == profile.stack_signature
+        else 0.0
+    )
     if variant_command_overlap > 0:
         reasons.append("variant-command-match")
     if variant_path_overlap > 0:
@@ -260,10 +334,16 @@ def build_candidate_features(
         reasons.append("path-overlap:" + ",".join(best_path_tokens))
 
     env_score = 0.0
-    if profile.env_fingerprint and variant.get("env_fingerprint") == profile.env_fingerprint:
+    if (
+        profile.env_fingerprint
+        and variant.get("env_fingerprint") == profile.env_fingerprint
+    ):
         env_score += 0.55
         reasons.append("variant-env-match")
-    if profile.repo_fingerprint and variant.get("repo_fingerprint") == profile.repo_fingerprint:
+    if (
+        profile.repo_fingerprint
+        and variant.get("repo_fingerprint") == profile.repo_fingerprint
+    ):
         env_score += 0.45
         reasons.append("variant-repo-match")
     raw_applicability = variant.get("applicability_json")
@@ -280,7 +360,9 @@ def build_candidate_features(
 
     # Phase 4.3: Scale entity scores by learned importance weights
     if entity_importance:
-        involved_keys = list(entity_signals.get("matched_keys", [])) + list(entity_signals.get("conflict_keys", []))
+        involved_keys = list(entity_signals.get("matched_keys", [])) + list(
+            entity_signals.get("conflict_keys", [])
+        )
         if involved_keys:
             weights = [entity_importance.get(k, 1.0) for k in involved_keys]
             avg_weight = sum(weights) / len(weights)
@@ -296,15 +378,27 @@ def build_candidate_features(
     if lexical_score > 0:
         reasons.append("retrieval-signal")
 
-    dense_score = _clamp(max(float(candidate.get("dense_score", 0.0)), float(retrieval_signals.get("dense_score", 0.0))))
+    dense_score = _clamp(
+        max(
+            float(candidate.get("dense_score", 0.0)),
+            float(retrieval_signals.get("dense_score", 0.0)),
+        )
+    )
     if dense_score > 0.0:
         reasons.append("dense-retrieval")
 
-    variant_score = _clamp(max(float(candidate.get("variant_match_score", 0.0)), variant_stack_overlap * 0.35))
+    variant_score = _clamp(
+        max(
+            float(candidate.get("variant_match_score", 0.0)),
+            variant_stack_overlap * 0.35,
+        )
+    )
     if variant_score > 0.45:
         reasons.append("context-variant-match")
 
-    support_value = max(int(variant.get("times_used", 0)), int(candidate.get("times_seen", 1)))
+    support_value = max(
+        int(variant.get("times_used", 0)), int(candidate.get("times_seen", 1))
+    )
     support_score = min(support_value, 10) / 10.0
     recency_score = max(
         recency_signal(str(variant.get("updated_at", ""))),
@@ -314,14 +408,25 @@ def build_candidate_features(
     if feedback_score > 0.55:
         reasons.append("feedback-prior")
 
-    success_prior_score = _clamp(max(float(variant.get("confidence", candidate.get("confidence", 0.5))), feedback_score))
+    success_prior_score = _clamp(
+        max(
+            float(variant.get("confidence", candidate.get("confidence", 0.5))),
+            feedback_score,
+        )
+    )
     if success_prior_score > 0.55:
         reasons.append("prior-success")
 
     variant_success = int(variant.get("success_count", 0))
     variant_reject = int(variant.get("reject_count", 0))
-    times_used = max(int(variant.get("times_used", 0)), int(candidate.get("times_seen", 0)))
-    proven_score = (variant_success + 1) / (times_used + 2) if (variant_success + variant_reject) > 0 else 0.0
+    times_used = max(
+        int(variant.get("times_used", 0)), int(candidate.get("times_seen", 0))
+    )
+    proven_score = (
+        (variant_success + 1) / (times_used + 2)
+        if (variant_success + variant_reject) > 0
+        else 0.0
+    )
     if proven_score > 0.55:
         reasons.append("proven-variant")
 

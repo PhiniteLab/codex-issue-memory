@@ -163,7 +163,9 @@ def build_positive_taxonomy_cases() -> list[FailureTaxonomyQueryCase]:
                     slug=f"{expected_title.lower().replace(' ', '-')}:context_exception",
                     category=domain,
                     mode="context_exception",
-                    error_text=_squash(f"{payload['context']} {str(payload['raw_error']).split(':', 1)[0]}"),
+                    error_text=_squash(
+                        f"{payload['context']} {str(payload['raw_error']).split(':', 1)[0]}"
+                    ),
                     file_path=str(payload.get("file_path", "")),
                     command=str(payload.get("command", "")),
                     repo_name=repo_name,
@@ -173,7 +175,9 @@ def build_positive_taxonomy_cases() -> list[FailureTaxonomyQueryCase]:
                     slug=f"{expected_title.lower().replace(' ', '-')}:telemetry_noise",
                     category=domain,
                     mode="telemetry_noise",
-                    error_text=_squash(f"{payload['raw_error']} while updating telemetry json and experiment repo tooling"),
+                    error_text=_squash(
+                        f"{payload['raw_error']} while updating telemetry json and experiment repo tooling"
+                    ),
                     file_path=str(payload.get("file_path", "")),
                     command=(str(payload.get("command", "")) + " --log-json").strip(),
                     repo_name=repo_name,
@@ -187,7 +191,9 @@ def build_positive_taxonomy_cases() -> list[FailureTaxonomyQueryCase]:
 POSITIVE_TAXONOMY_CASES = build_positive_taxonomy_cases()
 
 
-def run_failure_taxonomy_benchmark(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[str, Any]:
+def run_failure_taxonomy_benchmark(
+    app: Any, *, repeats: int = 1, limit: int = 3
+) -> dict[str, Any]:
     positive_cases = POSITIVE_TAXONOMY_CASES
     negative_cases = NEGATIVE_ABSTAIN_CASES
     all_latencies: list[float] = []
@@ -286,7 +292,9 @@ def run_failure_taxonomy_benchmark(app: Any, *, repeats: int = 1, limit: int = 3
         "positive_total_runs": positive_total,
         "negative_total_runs": negative_total,
         "positive_top1_accuracy": round(positive_top1 / max(positive_total, 1), 4),
-        "positive_actionable_rate": round(positive_actionable / max(positive_total, 1), 4),
+        "positive_actionable_rate": round(
+            positive_actionable / max(positive_total, 1), 4
+        ),
         "negative_abstain_rate": round(negative_abstain / max(negative_total, 1), 4),
         "decision_histogram": decision_histogram,
         "latency_ms": {
@@ -299,7 +307,9 @@ def run_failure_taxonomy_benchmark(app: Any, *, repeats: int = 1, limit: int = 3
     }
 
 
-def run_runtime_diagnostics(app: Any, *, repeats: int = 8, limit: int = 3) -> dict[str, Any]:
+def run_runtime_diagnostics(
+    app: Any, *, repeats: int = 8, limit: int = 3
+) -> dict[str, Any]:
     seed_user_domain_memory(app)
     taxonomy = run_failure_taxonomy_benchmark(app, repeats=max(repeats, 1), limit=limit)
 
@@ -384,7 +394,10 @@ def run_runtime_diagnostics(app: Any, *, repeats: int = 8, limit: int = 3) -> di
             session_id=session_id,
             limit=3,
         )
-        rerank_ok = bool(second["matches"]) and int(second["matches"][0]["pattern_id"]) != top_pattern_before
+        rerank_ok = (
+            bool(second["matches"])
+            and int(second["matches"][0]["pattern_id"]) != top_pattern_before
+        )
     else:
         second = {"matches": []}
 
@@ -400,7 +413,12 @@ def run_runtime_diagnostics(app: Any, *, repeats: int = 8, limit: int = 3) -> di
             "latency_ms": {
                 "mean": round(statistics.mean(consolidation_latencies), 3),
                 "median": round(statistics.median(consolidation_latencies), 3),
-                "p95": round(sorted(consolidation_latencies)[max(int(round(0.95 * (len(consolidation_latencies) - 1))), 0)], 3),
+                "p95": round(
+                    sorted(consolidation_latencies)[
+                        max(int(round(0.95 * (len(consolidation_latencies) - 1))), 0)
+                    ],
+                    3,
+                ),
                 "max": round(max(consolidation_latencies), 3),
             },
             "distinct_pattern_ids": len(distinct_pattern_ids),

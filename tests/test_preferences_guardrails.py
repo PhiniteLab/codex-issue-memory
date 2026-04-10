@@ -26,7 +26,9 @@ class PreferenceGuardrailTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-preferences-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -64,12 +66,20 @@ class PreferenceGuardrailTests(unittest.TestCase):
             limit=3,
         )
         self.assertTrue(result["matches"])
-        self.assertEqual(result["matches"][0]["title"], "Requests missing because CLI uses wrong interpreter")
+        self.assertEqual(
+            result["matches"][0]["title"],
+            "Requests missing because CLI uses wrong interpreter",
+        )
         self.assertTrue(
-            any(reason.startswith("preference-rule:fix_interpreter_or_venv") for reason in result["matches"][0]["why"])
+            any(
+                reason.startswith("preference-rule:fix_interpreter_or_venv")
+                for reason in result["matches"][0]["why"]
+            )
         )
 
-        listed = self.app.issue_list_preferences(scope_type="user", scope_key="mehmet", limit=5)
+        listed = self.app.issue_list_preferences(
+            scope_type="user", scope_key="mehmet", limit=5
+        )
         self.assertEqual(len(listed["rules"]), 1)
         self.assertEqual(listed["rules"][0]["strategy_key"], "fix_interpreter_or_venv")
 
@@ -91,10 +101,17 @@ class PreferenceGuardrailTests(unittest.TestCase):
         )
         self.assertTrue(result["guardrails"])
         self.assertTrue(
-            any("cwd" in item["prevention_rule"].lower() or "repository root" in item["prevention_rule"].lower() for item in result["guardrails"])
+            any(
+                "cwd" in item["prevention_rule"].lower()
+                or "repository root" in item["prevention_rule"].lower()
+                for item in result["guardrails"]
+            )
         )
         self.assertTrue(result["preferences"]["preferred_strategies"])
-        self.assertEqual(result["preferences"]["preferred_strategies"][0]["strategy_key"], "resolve_from___file__")
+        self.assertEqual(
+            result["preferences"]["preferred_strategies"][0]["strategy_key"],
+            "resolve_from___file__",
+        )
 
 
 if __name__ == "__main__":

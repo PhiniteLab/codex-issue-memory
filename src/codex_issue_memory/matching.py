@@ -5,7 +5,12 @@ from typing import Any
 
 from .models import MatchDecision, MatchResult, QueryProfile
 from .normalization import build_query_profile
-from .retrieval import CandidateRetriever, HeuristicRanker, MatchDecisionPolicy, RankedCandidate
+from .retrieval import (
+    CandidateRetriever,
+    HeuristicRanker,
+    MatchDecisionPolicy,
+    RankedCandidate,
+)
 from .settings import Settings
 from .storage import IssueMemoryStore
 
@@ -13,12 +18,18 @@ from .storage import IssueMemoryStore
 class IssueMatcher:
     """Variant-first hybrid retrieval + deterministic ranking layer for issue matching."""
 
-    def __init__(self, store: IssueMemoryStore, settings: Settings | None = None) -> None:
+    def __init__(
+        self, store: IssueMemoryStore, settings: Settings | None = None
+    ) -> None:
         self.store = store
         self.settings = settings or store.settings
         self.retriever = CandidateRetriever(store)
         self.ranker = HeuristicRanker(store, self.settings)
-        self.calibration_profile = self.store.load_calibration_profile() if self.settings.enable_calibration_profile else {}
+        self.calibration_profile = (
+            self.store.load_calibration_profile()
+            if self.settings.enable_calibration_profile
+            else {}
+        )
 
     def _threshold_bundle(self, error_family: str) -> dict[str, float]:
         bundle = {
@@ -26,16 +37,26 @@ class IssueMatcher:
             "weak_threshold": float(self.settings.match_weak_threshold),
             "ambiguity_margin": float(self.settings.ambiguity_margin),
         }
-        profile = self.calibration_profile if isinstance(self.calibration_profile, dict) else {}
+        profile = (
+            self.calibration_profile
+            if isinstance(self.calibration_profile, dict)
+            else {}
+        )
         raw_global_overrides = profile.get("global")
-        global_overrides = raw_global_overrides if isinstance(raw_global_overrides, dict) else {}
+        global_overrides = (
+            raw_global_overrides if isinstance(raw_global_overrides, dict) else {}
+        )
         for key in bundle:
             if key in global_overrides:
                 bundle[key] = float(global_overrides[key])
         raw_family_overrides = profile.get("families")
-        family_overrides = raw_family_overrides if isinstance(raw_family_overrides, dict) else {}
+        family_overrides = (
+            raw_family_overrides if isinstance(raw_family_overrides, dict) else {}
+        )
         raw_selected_family = family_overrides.get(error_family)
-        selected_family = raw_selected_family if isinstance(raw_selected_family, dict) else {}
+        selected_family = (
+            raw_selected_family if isinstance(raw_selected_family, dict) else {}
+        )
         for key in bundle:
             if key in selected_family:
                 bundle[key] = float(selected_family[key])
@@ -126,29 +147,35 @@ class IssueMatcher:
         )
         t_decision_start = time.perf_counter()
         decision = self._decision_policy_for_family(profile.error_family).decide(ranked)
-        stage_latency["decision_latency_ms"] = int((time.perf_counter() - t_decision_start) * 1000)
+        stage_latency["decision_latency_ms"] = int(
+            (time.perf_counter() - t_decision_start) * 1000
+        )
         visible_ranked = [] if decision.status == "abstain" else ranked[:limit]
         visible_matches = [self._to_match_result(item) for item in visible_ranked]
         latency_ms = int((time.perf_counter() - start) * 1000)
 
         event_meta: dict[str, Any] = {"_ranked": visible_ranked}
         if log_event and self.settings.telemetry_enabled:
-            event_meta.update(self.store.log_retrieval_event(
-                profile=profile,
-                ranked=ranked,
-                decision=decision,
-                project_scope=project_scope,
-                session_id=session_id,
-                repo_name=repo_name,
-                retrieval_mode=retrieval_mode,
-                latency_ms=latency_ms,
-                stage_latency=stage_latency,
-                experiment_id=experiment_id,
-                experiment_arm=experiment_arm,
-            ))
+            event_meta.update(
+                self.store.log_retrieval_event(
+                    profile=profile,
+                    ranked=ranked,
+                    decision=decision,
+                    project_scope=project_scope,
+                    session_id=session_id,
+                    repo_name=repo_name,
+                    retrieval_mode=retrieval_mode,
+                    latency_ms=latency_ms,
+                    stage_latency=stage_latency,
+                    experiment_id=experiment_id,
+                    experiment_arm=experiment_arm,
+                )
+            )
             ids_by_rank = {
                 int(rank): int(candidate_id)
-                for rank, candidate_id in event_meta.get("candidate_ids_by_rank", {}).items()
+                for rank, candidate_id in event_meta.get(
+                    "candidate_ids_by_rank", {}
+                ).items()
             }
             for index, match in enumerate(visible_matches, start=1):
                 match.candidate_rank = index
@@ -184,7 +211,11 @@ class IssueMatcher:
         session_id: str = "",
         log_event: bool = True,
     ) -> tuple[list[MatchResult], dict[str, Any]]:
-        profile = build_query_profile(error_text=query, project_scope=project_scope or "global", user_scope=user_scope)
+        profile = build_query_profile(
+            error_text=query,
+            project_scope=project_scope or "global",
+            user_scope=user_scope,
+        )
         ranked = self.ranked_candidates(
             profile,
             project_scope=project_scope,
@@ -210,7 +241,9 @@ class IssueMatcher:
             )
             ids_by_rank = {
                 int(rank): int(candidate_id)
-                for rank, candidate_id in event_meta.get("candidate_ids_by_rank", {}).items()
+                for rank, candidate_id in event_meta.get(
+                    "candidate_ids_by_rank", {}
+                ).items()
             }
             for index, match in enumerate(matches, start=1):
                 match.candidate_rank = index
@@ -227,8 +260,12 @@ class IssueMatcher:
             if raw_variant_id not in (None, "")
             else (int(best_variant["id"]) if best_variant else None)
         )
-        canonical_fix = str(best_variant.get("canonical_fix") or candidate["canonical_fix"])
-        verification_steps = str(best_variant.get("verification_steps") or candidate["verification_steps"])
+        canonical_fix = str(
+            best_variant.get("canonical_fix") or candidate["canonical_fix"]
+        )
+        verification_steps = str(
+            best_variant.get("verification_steps") or candidate["verification_steps"]
+        )
         why = list(ranked.reasons)
         if variant_id is not None and "variant-first-candidate" not in why:
             why = ["variant-first-candidate", *why]

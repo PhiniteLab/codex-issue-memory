@@ -7,7 +7,11 @@ from pathlib import Path
 
 
 def _load_validator_module():
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "validate_plugin_distribution.py"
+    script_path = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "validate_plugin_distribution.py"
+    )
     module_name = "validate_plugin_distribution"
     spec = importlib.util.spec_from_file_location(module_name, script_path)
     assert spec and spec.loader is not None
@@ -29,7 +33,9 @@ def test_validate_plugin_distribution_happy_path(tmp_path: Path) -> None:
         '[project]\nversion = "0.1.0"\n',
         encoding="utf-8",
     )
-    (package_root / "__init__.py").write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+    (package_root / "__init__.py").write_text(
+        '__version__ = "0.1.0"\n', encoding="utf-8"
+    )
     (plugin_root / "plugin.json").write_text(
         json.dumps(
             {
@@ -83,7 +89,9 @@ def test_validate_plugin_distribution_happy_path(tmp_path: Path) -> None:
     assert report.failures == []
 
 
-def test_validate_plugin_distribution_flags_missing_interface_field(tmp_path: Path) -> None:
+def test_validate_plugin_distribution_flags_missing_interface_field(
+    tmp_path: Path,
+) -> None:
     package_root = tmp_path / "src" / "codex_issue_memory"
     package_root.mkdir(parents=True)
     plugin_root = tmp_path / ".codex-plugin"
@@ -92,7 +100,9 @@ def test_validate_plugin_distribution_flags_missing_interface_field(tmp_path: Pa
         '[project]\nversion = "0.1.0"\n',
         encoding="utf-8",
     )
-    (package_root / "__init__.py").write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+    (package_root / "__init__.py").write_text(
+        '__version__ = "0.1.0"\n', encoding="utf-8"
+    )
     (plugin_root / "plugin.json").write_text(
         json.dumps(
             {

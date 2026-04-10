@@ -23,10 +23,14 @@ class StrategyBanditShadowModeTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self._env_backup = {key: os.environ.get(key) for key in self._ENV_KEYS}
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-shadow-bandit-")
+        self.temp_dir = tempfile.TemporaryDirectory(
+            prefix="issue-memory-shadow-bandit-"
+        )
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -75,7 +79,10 @@ class StrategyBanditShadowModeTests(unittest.TestCase):
             or any("proven-variant" in reason for reason in all_reasons),
             msg=f"Expected bandit or proven-variant signal in {all_reasons}",
         )
-        self.assertIn(promoted_pattern_id, {int(match["pattern_id"]) for match in second["matches"]})
+        self.assertIn(
+            promoted_pattern_id,
+            {int(match["pattern_id"]) for match in second["matches"]},
+        )
 
 
 if __name__ == "__main__":

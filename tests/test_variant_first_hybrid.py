@@ -10,10 +10,14 @@ from codex_issue_memory.app import IssueMemoryApp
 
 class VariantFirstHybridTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-variant-hybrid-")
+        self.temp_dir = tempfile.TemporaryDirectory(
+            prefix="issue-memory-variant-hybrid-"
+        )
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -82,7 +86,9 @@ class VariantFirstHybridTests(unittest.TestCase):
         self.assertEqual(result["decision"]["status"], "match")
         self.assertEqual(result["matches"][0]["pattern_id"], first["pattern_id"])
         self.assertEqual(result["matches"][0]["variant_id"], second["variant_id"])
-        self.assertIn("Move each dataloader batch", result["matches"][0]["canonical_fix"])
+        self.assertIn(
+            "Move each dataloader batch", result["matches"][0]["canonical_fix"]
+        )
         self.assertIn("variant-first-candidate", result["matches"][0]["why"])
 
         with self.app.store.managed_connection() as conn:
@@ -97,7 +103,9 @@ class VariantFirstHybridTests(unittest.TestCase):
 
         self.assertIsNotNone(retrieval_event)
         assert retrieval_event is not None
-        self.assertEqual(int(retrieval_event["selected_variant_id"]), second["variant_id"])
+        self.assertEqual(
+            int(retrieval_event["selected_variant_id"]), second["variant_id"]
+        )
         self.assertGreaterEqual(len(candidate_rows), 2)
         self.assertEqual(str(candidate_rows[0]["candidate_type"]), "variant")
 
@@ -193,13 +201,20 @@ class VariantFirstHybridTests(unittest.TestCase):
         self.assertEqual(consolidated["pattern_id"], first["pattern_id"])
         self.assertEqual(consolidated["variant_id"], second["variant_id"])
         self.assertEqual(consolidated["variant_action"], "updated")
-        self.assertEqual(consolidated["consolidation"]["matched_variant_id"], second["variant_id"])
+        self.assertEqual(
+            consolidated["consolidation"]["matched_variant_id"], second["variant_id"]
+        )
         self.assertIn("feedback-weight", consolidated["consolidation"]["reasons"])
         self.assertLess(consolidated["consolidation"]["score"], 0.5)
 
-        bundle = self.app.issue_get(pattern_id=first["pattern_id"], include_examples=True, examples_limit=10)
+        bundle = self.app.issue_get(
+            pattern_id=first["pattern_id"], include_examples=True, examples_limit=10
+        )
         variants_by_id = {row["id"]: row for row in bundle["variants"]}
-        self.assertGreater(variants_by_id[second["variant_id"]]["success_count"], variants_by_id[first["variant_id"]]["success_count"])
+        self.assertGreater(
+            variants_by_id[second["variant_id"]]["success_count"],
+            variants_by_id[first["variant_id"]]["success_count"],
+        )
         self.assertEqual(len(bundle["variants"]), 2)
 
 

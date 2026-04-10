@@ -39,16 +39,28 @@ class Phase8RolloutTests(unittest.TestCase):
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.backup_root.mkdir(parents=True, exist_ok=True)
         os.environ["ISSUE_MEMORY_HOME"] = str(self.data_root)
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(self.data_root / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            self.data_root / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(self.state_root)
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(self.backup_root)
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(self.state_root / "log")
         os.environ["ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE"] = "1"
-        os.environ["ISSUE_MEMORY_CALIBRATION_PROFILE_PATH"] = str(self.state_root / "calibration_profile.json")
+        os.environ["ISSUE_MEMORY_CALIBRATION_PROFILE_PATH"] = str(
+            self.state_root / "calibration_profile.json"
+        )
         store = IssueMemoryStore.from_env()
         store.initialize()
         Path(os.environ["ISSUE_MEMORY_CALIBRATION_PROFILE_PATH"]).write_text(
-            json.dumps({"global": {"accept_threshold": 0.68, "weak_threshold": 0.40, "ambiguity_margin": 0.09}}),
+            json.dumps(
+                {
+                    "global": {
+                        "accept_threshold": 0.68,
+                        "weak_threshold": 0.40,
+                        "ambiguity_margin": 0.09,
+                    }
+                }
+            ),
             encoding="utf-8",
         )
         BackupManager.from_env().create_backup()
@@ -86,13 +98,22 @@ class Phase8RolloutTests(unittest.TestCase):
         payload = json.loads(buffer.getvalue())
         self.assertEqual(payload["mode"], "shadow")
         self.assertEqual(payload["env"]["ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT"], "1")
-        self.assertEqual(payload["env"]["ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE"], "1")
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE"], "1"
+        )
         self.assertIsNone(payload["max_instances"])
         self.assertEqual(payload["env"]["ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY"], "1")
         self.assertEqual(payload["env"]["ISSUE_MEMORY_MAX_MCP_INSTANCES"], "0")
-        self.assertTrue(payload["env"]["ISSUE_MEMORY_SERVER_LOCK_DIR"].endswith("/state/run"))
-        self.assertEqual(payload["env"]["ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE"], "75")
-        self.assertEqual(payload["env"]["ISSUE_MEMORY_SERVER_OWNER_KEY_ENV"], "ISSUE_MEMORY_MAIN_CONVERSATION_KEY")
+        self.assertTrue(
+            payload["env"]["ISSUE_MEMORY_SERVER_LOCK_DIR"].endswith("/state/run")
+        )
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE"], "75"
+        )
+        self.assertEqual(
+            payload["env"]["ISSUE_MEMORY_SERVER_OWNER_KEY_ENV"],
+            "ISSUE_MEMORY_MAIN_CONVERSATION_KEY",
+        )
 
     def test_doctor_passes_for_registered_shadow_rollout(self) -> None:
         self._register_codex()
@@ -105,7 +126,9 @@ class Phase8RolloutTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["warnings"], 0)
         self.assertIsNone(payload["expected_max_instances"])
 
-    def test_doctor_fails_when_owner_key_env_is_missing_from_registered_config(self) -> None:
+    def test_doctor_fails_when_owner_key_env_is_missing_from_registered_config(
+        self,
+    ) -> None:
         self._register_codex()
         config_path = self.codex_home / "config.toml"
         config_text = config_path.read_text(encoding="utf-8").replace(
@@ -121,7 +144,11 @@ class Phase8RolloutTests(unittest.TestCase):
 
         self.assertEqual(payload["status"], "fail")
         self.assertGreaterEqual(payload["summary"]["errors"], 1)
-        owner_env_checks = [item for item in payload["checks"] if item["name"] == "env:ISSUE_MEMORY_SERVER_OWNER_KEY_ENV"]
+        owner_env_checks = [
+            item
+            for item in payload["checks"]
+            if item["name"] == "env:ISSUE_MEMORY_SERVER_OWNER_KEY_ENV"
+        ]
         self.assertEqual(len(owner_env_checks), 1)
         self.assertFalse(owner_env_checks[0]["ok"])
 
@@ -130,17 +157,24 @@ class Phase8RolloutTests(unittest.TestCase):
         config_text = (self.codex_home / "config.toml").read_text(encoding="utf-8")
         self.assertIn('ISSUE_MEMORY_MAX_MCP_INSTANCES = "0"', config_text)
         self.assertIn('ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT = "1"', config_text)
-        self.assertIn('ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = "1"', config_text)
+        self.assertIn(
+            'ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = "1"', config_text
+        )
         self.assertIn('ISSUE_MEMORY_SERVER_LOCK_DIR = "', config_text)
         self.assertIn('ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE = "75"', config_text)
         self.assertIn('ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY = "1"', config_text)
-        self.assertIn('ISSUE_MEMORY_SERVER_OWNER_KEY_ENV = "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"', config_text)
+        self.assertIn(
+            'ISSUE_MEMORY_SERVER_OWNER_KEY_ENV = "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"',
+            config_text,
+        )
 
     def test_maintenance_cli_runs_e2e_mcp_reuse_harness(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         env = os.environ.copy()
         src_root = str(repo_root / "src")
-        env["PYTHONPATH"] = src_root + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["PYTHONPATH"] = src_root + (
+            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+        )
         proc = subprocess.run(
             [
                 sys.executable,

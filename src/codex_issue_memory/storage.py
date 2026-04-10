@@ -23,17 +23,17 @@ STRATEGY_PRIOR_ALPHA = 2.0
 STRATEGY_PRIOR_BETA = 2.0
 VARIANT_PRIOR_ALPHA = 1.0
 VARIANT_PRIOR_BETA = 1.0
-STRONG_GLOBAL_FEEDBACK = {'fix_verified', 'false_positive'}
+STRONG_GLOBAL_FEEDBACK = {"fix_verified", "false_positive"}
 
 WEAK_FEEDBACK_WEIGHTS: dict[str, float] = {
-    'candidate_accepted': 0.35,
-    'candidate_rejected': 0.25,
-    'merge_confirmed': 0.40,
-    'merge_rejected': 0.40,
-    'split_confirmed': 0.40,
-    'split_rejected': 0.40,
+    "candidate_accepted": 0.35,
+    "candidate_rejected": 0.25,
+    "merge_confirmed": 0.40,
+    "merge_rejected": 0.40,
+    "split_confirmed": 0.40,
+    "split_rejected": 0.40,
 }
-WEAK_POSITIVE_FEEDBACK = {'candidate_accepted', 'merge_confirmed', 'split_confirmed'}
+WEAK_POSITIVE_FEEDBACK = {"candidate_accepted", "merge_confirmed", "split_confirmed"}
 
 
 def utc_now_iso() -> str:
@@ -44,7 +44,7 @@ def parse_iso_datetime(value: str) -> datetime | None:
     if not value:
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
     if parsed.tzinfo is None:
@@ -83,11 +83,13 @@ class IssueMemoryStore:
         return conn
 
     @contextmanager
-    def managed_connection(self, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
+    def managed_connection(
+        self, *, immediate: bool = False
+    ) -> Iterator[sqlite3.Connection]:
         conn = self.connect()
         try:
             if immediate:
-                conn.execute('BEGIN IMMEDIATE;')
+                conn.execute("BEGIN IMMEDIATE;")
             yield conn
             conn.commit()
         except Exception:
@@ -110,24 +112,34 @@ class IssueMemoryStore:
             return self._migration_runner.schema_state(conn)
 
     def report_dir(self) -> Path:
-        report_dir = self.settings.state_dir / 'reports'
+        report_dir = self.settings.state_dir / "reports"
         report_dir.mkdir(parents=True, exist_ok=True)
         return report_dir
 
     def save_report(self, name: str, payload: dict[str, Any]) -> Path:
         report_path = self.report_dir() / f"{name}.json"
-        report_path.write_text(self._json_dumps(payload), encoding='utf-8')
+        report_path.write_text(self._json_dumps(payload), encoding="utf-8")
         return report_path
 
     def list_saved_reports(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
-        for path in sorted(self.report_dir().glob('*.json'), key=lambda item: item.stat().st_mtime, reverse=True):
-            rows.append({
-                'name': path.stem,
-                'path': str(path),
-                'bytes': path.stat().st_size,
-                'updated_at': datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).replace(microsecond=0).isoformat(),
-            })
+        for path in sorted(
+            self.report_dir().glob("*.json"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        ):
+            rows.append(
+                {
+                    "name": path.stem,
+                    "path": str(path),
+                    "bytes": path.stat().st_size,
+                    "updated_at": datetime.fromtimestamp(
+                        path.stat().st_mtime, tz=timezone.utc
+                    )
+                    .replace(microsecond=0)
+                    .isoformat(),
+                }
+            )
         return rows
 
     def load_saved_report(self, name: str) -> dict[str, Any] | None:
@@ -135,7 +147,7 @@ class IssueMemoryStore:
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text(encoding='utf-8'))
+            return json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError, json.JSONDecodeError):
             return None
 
@@ -146,7 +158,7 @@ class IssueMemoryStore:
         if not path.exists():
             return {}
         try:
-            return json.loads(path.read_text(encoding='utf-8'))
+            return json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError, json.JSONDecodeError):
             return {}
 
@@ -166,7 +178,9 @@ class IssueMemoryStore:
         try:
             return json.loads(str(value))
         except (TypeError, ValueError, json.JSONDecodeError):
-            _logger.warning("Failed to decode JSON field (len=%d), using fallback", len(str(value)))
+            _logger.warning(
+                "Failed to decode JSON field (len=%d), using fallback", len(str(value))
+            )
             return fallback
 
     @staticmethod
@@ -238,7 +252,9 @@ class IssueMemoryStore:
             ),
         )
 
-    def _scope_predicate(self, project_scope: str) -> tuple[str, list[Any], str, list[Any]]:
+    def _scope_predicate(
+        self, project_scope: str
+    ) -> tuple[str, list[Any], str, list[Any]]:
         if project_scope and project_scope != "global":
             return (
                 "p.project_scope IN (?, 'global')",
@@ -280,7 +296,9 @@ class IssueMemoryStore:
         }
 
     @staticmethod
-    def _raw_candidate_sort_key(meta: dict[str, Any], pattern_id: int) -> tuple[int, int, int, int, int, int, int, int, int]:
+    def _raw_candidate_sort_key(
+        meta: dict[str, Any], pattern_id: int
+    ) -> tuple[int, int, int, int, int, int, int, int, int]:
         large = 10**9
         return (
             0 if meta["root_rank"] is not None else 1,
@@ -330,7 +348,9 @@ class IssueMemoryStore:
         weight = position - lower
         return float(ordered[lower] * (1.0 - weight) + ordered[upper] * weight)
 
-    def find_pattern_by_signature(self, project_scope: str, signature: str) -> dict[str, Any] | None:
+    def find_pattern_by_signature(
+        self, project_scope: str, signature: str
+    ) -> dict[str, Any] | None:
         with self.managed_connection() as conn:
             row = conn.execute(
                 "SELECT * FROM issue_patterns WHERE project_scope = ? AND signature = ?",
@@ -340,10 +360,14 @@ class IssueMemoryStore:
 
     def find_pattern_by_id(self, pattern_id: int) -> dict[str, Any] | None:
         with self.managed_connection() as conn:
-            row = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+            ).fetchone()
             return self._row_to_dict(row)
 
-    def _create_pattern_tx(self, conn: sqlite3.Connection, payload: dict[str, Any]) -> dict[str, Any]:
+    def _create_pattern_tx(
+        self, conn: sqlite3.Connection, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         now = utc_now_iso()
         try:
             cur = conn.execute(
@@ -387,16 +411,22 @@ class IssueMemoryStore:
             raise RuntimeError("Failed to determine pattern id after insert")
         pattern_id = int(cur.lastrowid)
         self._sync_pattern_fts(conn, pattern_id)
-        row = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+        ).fetchone()
         return dict(row)
 
     def create_pattern(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.managed_connection() as conn:
             return self._create_pattern_tx(conn, payload)
 
-    def _touch_pattern_tx(self, conn: sqlite3.Connection, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def _touch_pattern_tx(
+        self, conn: sqlite3.Connection, pattern_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         now = utc_now_iso()
-        existing = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
+        existing = conn.execute(
+            "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+        ).fetchone()
         if existing is None:
             raise KeyError(f"Pattern {pattern_id} not found")
 
@@ -409,13 +439,41 @@ class IssueMemoryStore:
         else:
             domain = existing_domain
 
-        title = str(existing["title"] or payload.get("title") or "").strip() or str(payload.get("title") or "").strip()
-        canonical_symptom = str(existing["canonical_symptom"] or payload.get("canonical_symptom") or "").strip() or str(payload.get("canonical_symptom") or "").strip()
-        canonical_fix = str(existing["canonical_fix"] or payload.get("canonical_fix") or "").strip() or str(payload.get("canonical_fix") or "").strip()
-        prevention_rule = str(existing["prevention_rule"] or payload.get("prevention_rule") or "").strip() or str(payload.get("prevention_rule") or "").strip()
-        verification_steps = str(existing["verification_steps"] or payload.get("verification_steps") or "").strip() or str(payload.get("verification_steps") or "").strip()
-        confidence = max(float(existing["confidence"]), float(payload.get("confidence", existing["confidence"])))
-        times_seen = int(existing["times_seen"]) + int(payload.get("times_seen_delta", 1))
+        title = (
+            str(existing["title"] or payload.get("title") or "").strip()
+            or str(payload.get("title") or "").strip()
+        )
+        canonical_symptom = (
+            str(
+                existing["canonical_symptom"] or payload.get("canonical_symptom") or ""
+            ).strip()
+            or str(payload.get("canonical_symptom") or "").strip()
+        )
+        canonical_fix = (
+            str(existing["canonical_fix"] or payload.get("canonical_fix") or "").strip()
+            or str(payload.get("canonical_fix") or "").strip()
+        )
+        prevention_rule = (
+            str(
+                existing["prevention_rule"] or payload.get("prevention_rule") or ""
+            ).strip()
+            or str(payload.get("prevention_rule") or "").strip()
+        )
+        verification_steps = (
+            str(
+                existing["verification_steps"]
+                or payload.get("verification_steps")
+                or ""
+            ).strip()
+            or str(payload.get("verification_steps") or "").strip()
+        )
+        confidence = max(
+            float(existing["confidence"]),
+            float(payload.get("confidence", existing["confidence"])),
+        )
+        times_seen = int(existing["times_seen"]) + int(
+            payload.get("times_seen_delta", 1)
+        )
 
         conn.execute(
             """
@@ -440,10 +498,14 @@ class IssueMemoryStore:
             ),
         )
         self._sync_pattern_fts(conn, pattern_id)
-        row = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+        ).fetchone()
         return dict(row)
 
-    def _add_example_tx(self, conn: sqlite3.Connection, *, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def _add_example_tx(
+        self, conn: sqlite3.Connection, *, pattern_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         cur = conn.execute(
             """
             INSERT INTO issue_examples(
@@ -467,7 +529,9 @@ class IssueMemoryStore:
             raise RuntimeError("Failed to determine example id after insert")
         example_id = int(cur.lastrowid)
         self._sync_example_fts(conn, example_id)
-        row = conn.execute("SELECT * FROM issue_examples WHERE id = ?", (example_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_examples WHERE id = ?", (example_id,)
+        ).fetchone()
         return dict(row)
 
     def add_example(
@@ -530,19 +594,27 @@ class IssueMemoryStore:
             ]
         )
 
-    def _find_variant_by_key_tx(self, conn: sqlite3.Connection, *, pattern_id: int, variant_key: str) -> dict[str, Any] | None:
+    def _find_variant_by_key_tx(
+        self, conn: sqlite3.Connection, *, pattern_id: int, variant_key: str
+    ) -> dict[str, Any] | None:
         row = conn.execute(
             "SELECT * FROM issue_variants WHERE pattern_id = ? AND variant_key = ?",
             (pattern_id, variant_key),
         ).fetchone()
         return dict(row) if row is not None else None
 
-    def find_variant_by_key(self, *, pattern_id: int, variant_key: str) -> dict[str, Any] | None:
+    def find_variant_by_key(
+        self, *, pattern_id: int, variant_key: str
+    ) -> dict[str, Any] | None:
         with self.managed_connection() as conn:
-            row = self._find_variant_by_key_tx(conn, pattern_id=pattern_id, variant_key=variant_key)
+            row = self._find_variant_by_key_tx(
+                conn, pattern_id=pattern_id, variant_key=variant_key
+            )
             return self._decode_variant_row(row) if row is not None else None
 
-    def get_variants_for_pattern(self, pattern_id: int, *, limit: int = 50) -> list[dict[str, Any]]:
+    def get_variants_for_pattern(
+        self, pattern_id: int, *, limit: int = 50
+    ) -> list[dict[str, Any]]:
         with self.managed_connection() as conn:
             rows = conn.execute(
                 """
@@ -555,7 +627,9 @@ class IssueMemoryStore:
             ).fetchall()
             return [self._decode_variant_row(row) for row in rows]
 
-    def _create_variant_tx(self, conn: sqlite3.Connection, *, pattern_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def _create_variant_tx(
+        self, conn: sqlite3.Connection, *, pattern_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         now = utc_now_iso()
         applicability = payload.get("applicability", {})
         negative_applicability = payload.get("negative_applicability", {})
@@ -625,39 +699,68 @@ class IssueMemoryStore:
             ).fetchone()
             if row is None:
                 raise
-            return self._update_variant_tx(conn, variant_id=int(row["id"]), payload=payload)
+            return self._update_variant_tx(
+                conn, variant_id=int(row["id"]), payload=payload
+            )
         if cur.lastrowid is None:
             raise RuntimeError("Failed to determine variant id after insert")
         variant_id = int(cur.lastrowid)
-        row = conn.execute("SELECT * FROM issue_variants WHERE id = ?", (variant_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_variants WHERE id = ?", (variant_id,)
+        ).fetchone()
         return dict(row)
 
-    def _update_variant_tx(self, conn: sqlite3.Connection, *, variant_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def _update_variant_tx(
+        self, conn: sqlite3.Connection, *, variant_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         now = utc_now_iso()
-        existing = conn.execute("SELECT * FROM issue_variants WHERE id = ?", (variant_id,)).fetchone()
+        existing = conn.execute(
+            "SELECT * FROM issue_variants WHERE id = ?", (variant_id,)
+        ).fetchone()
         if existing is None:
             raise KeyError(f"Variant {variant_id} not found")
         existing_tags = self._json_loads(existing["tags_json"], fallback=[])
         if not isinstance(existing_tags, list):
             existing_tags = []
-        merged_tags = list(dict.fromkeys([str(tag) for tag in existing_tags] + [str(tag) for tag in payload.get("tags", [])]))
-        applicability = payload.get("applicability") or self._json_loads(existing["applicability_json"], fallback={})
-        negative_applicability = payload.get("negative_applicability") or self._json_loads(existing["negative_applicability_json"], fallback={})
-        entity_slots = payload.get("entity_slots") or self._json_loads(existing["entity_slots_json"], fallback={})
-        strategy_hints = payload.get("strategy_hints") or self._json_loads(existing["strategy_hints_json"], fallback=[])
+        merged_tags = list(
+            dict.fromkeys(
+                [str(tag) for tag in existing_tags]
+                + [str(tag) for tag in payload.get("tags", [])]
+            )
+        )
+        applicability = payload.get("applicability") or self._json_loads(
+            existing["applicability_json"], fallback={}
+        )
+        negative_applicability = payload.get(
+            "negative_applicability"
+        ) or self._json_loads(existing["negative_applicability_json"], fallback={})
+        entity_slots = payload.get("entity_slots") or self._json_loads(
+            existing["entity_slots_json"], fallback={}
+        )
+        strategy_hints = payload.get("strategy_hints") or self._json_loads(
+            existing["strategy_hints_json"], fallback=[]
+        )
         status = str(payload.get("status") or existing["status"])
         if status not in {"provisional", "active", "archived"}:
             status = str(existing["status"])
         search_text = self._make_variant_search_text(
             title=str(payload.get("title") or existing["title"]),
-            canonical_fix=str(payload.get("canonical_fix") or existing["canonical_fix"]),
-            verification_steps=str(payload.get("verification_steps") or existing["verification_steps"]),
+            canonical_fix=str(
+                payload.get("canonical_fix") or existing["canonical_fix"]
+            ),
+            verification_steps=str(
+                payload.get("verification_steps") or existing["verification_steps"]
+            ),
             tags=merged_tags,
             applicability=applicability if isinstance(applicability, dict) else {},
-            patch_summary=str(payload.get("patch_summary") or existing["patch_summary"]),
+            patch_summary=str(
+                payload.get("patch_summary") or existing["patch_summary"]
+            ),
             strategy_key=str(payload.get("strategy_key") or existing["strategy_key"]),
             entity_slots=entity_slots if isinstance(entity_slots, dict) else {},
-            strategy_hints=list(strategy_hints) if isinstance(strategy_hints, list) else [],
+            strategy_hints=list(strategy_hints)
+            if isinstance(strategy_hints, list)
+            else [],
         )
         conn.execute(
             """
@@ -688,20 +791,33 @@ class IssueMemoryStore:
                 self._json_dumps(merged_tags),
                 search_text,
                 payload.get("strategy_key") or existing["strategy_key"],
-                self._json_dumps(entity_slots if isinstance(entity_slots, dict) else {}),
-                self._json_dumps(list(strategy_hints) if isinstance(strategy_hints, list) else []),
+                self._json_dumps(
+                    entity_slots if isinstance(entity_slots, dict) else {}
+                ),
+                self._json_dumps(
+                    list(strategy_hints) if isinstance(strategy_hints, list) else []
+                ),
                 status,
                 int(existing["times_used"]) + int(payload.get("times_used_delta", 1)),
-                int(existing["success_count"]) + int(payload.get("success_count_delta", 1)),
-                max(float(existing["confidence"]), float(payload.get("confidence", existing["confidence"]))),
-                max(float(existing["memory_strength"]), float(payload.get("memory_strength", existing["memory_strength"]))),
+                int(existing["success_count"])
+                + int(payload.get("success_count_delta", 1)),
+                max(
+                    float(existing["confidence"]),
+                    float(payload.get("confidence", existing["confidence"])),
+                ),
+                max(
+                    float(existing["memory_strength"]),
+                    float(payload.get("memory_strength", existing["memory_strength"])),
+                ),
                 now,
                 now,
                 now,
                 variant_id,
             ),
         )
-        row = conn.execute("SELECT * FROM issue_variants WHERE id = ?", (variant_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_variants WHERE id = ?", (variant_id,)
+        ).fetchone()
         return dict(row)
 
     def _make_episode_search_text(self, payload: dict[str, Any]) -> str:
@@ -717,7 +833,9 @@ class IssueMemoryStore:
                 str(payload.get("resolution_notes", "")),
                 " ".join(payload.get("exception_types", [])),
                 " ".join(payload.get("query_tokens", [])),
-                self._json_dumps(payload.get("entity_slots", {})) if payload.get("entity_slots") else "",
+                self._json_dumps(payload.get("entity_slots", {}))
+                if payload.get("entity_slots")
+                else "",
                 " ".join(payload.get("strategy_hints", [])),
             ]
         )
@@ -780,7 +898,9 @@ class IssueMemoryStore:
         if cur.lastrowid is None:
             raise RuntimeError("Failed to determine episode id after insert")
         episode_id = int(cur.lastrowid)
-        row = conn.execute("SELECT * FROM issue_episodes WHERE id = ?", (episode_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM issue_episodes WHERE id = ?", (episode_id,)
+        ).fetchone()
         return dict(row)
 
     def record_resolution(
@@ -799,7 +919,9 @@ class IssueMemoryStore:
                 pattern = self._create_pattern_tx(conn, pattern_payload)
                 pattern_action = "created"
             else:
-                pattern = self._touch_pattern_tx(conn, matched_pattern_id, pattern_payload)
+                pattern = self._touch_pattern_tx(
+                    conn, matched_pattern_id, pattern_payload
+                )
                 pattern_action = "updated"
 
             pattern_id = int(pattern["id"])
@@ -815,13 +937,21 @@ class IssueMemoryStore:
                     variant = dict(row)
 
             if variant is None:
-                variant = self._find_variant_by_key_tx(conn, pattern_id=pattern_id, variant_key=str(variant_payload["variant_key"]))
+                variant = self._find_variant_by_key_tx(
+                    conn,
+                    pattern_id=pattern_id,
+                    variant_key=str(variant_payload["variant_key"]),
+                )
 
             if variant is None:
-                variant = self._create_variant_tx(conn, pattern_id=pattern_id, payload=variant_payload)
+                variant = self._create_variant_tx(
+                    conn, pattern_id=pattern_id, payload=variant_payload
+                )
                 variant_action = "created"
             else:
-                variant = self._update_variant_tx(conn, variant_id=int(variant["id"]), payload=variant_payload)
+                variant = self._update_variant_tx(
+                    conn, variant_id=int(variant["id"]), payload=variant_payload
+                )
                 variant_action = "updated"
 
             episode = self._insert_episode_tx(
@@ -830,21 +960,23 @@ class IssueMemoryStore:
                 variant_id=int(variant["id"]),
                 payload=episode_payload,
             )
-            example = self._add_example_tx(conn, pattern_id=pattern_id, payload=example_payload)
+            example = self._add_example_tx(
+                conn, pattern_id=pattern_id, payload=example_payload
+            )
             seeded_learning = self._seed_verified_stats_tx(
                 conn,
-                variant_id=int(variant['id']),
-                strategy_key=str(variant.get('strategy_key', '')),
-                repo_name=str(episode_payload.get('repo_name', '')),
-                user_scope=str(episode_payload.get('user_scope', '')),
+                variant_id=int(variant["id"]),
+                strategy_key=str(variant.get("strategy_key", "")),
+                repo_name=str(episode_payload.get("repo_name", "")),
+                user_scope=str(episode_payload.get("user_scope", "")),
             )
             review_item = None
             if review_payload is not None:
                 review_item = self._enqueue_review_item_tx(
                     conn,
                     pattern_id=pattern_id,
-                    variant_id=int(variant['id']),
-                    episode_id=int(episode['id']),
+                    variant_id=int(variant["id"]),
+                    episode_id=int(episode["id"]),
                     payload=review_payload,
                 )
 
@@ -877,26 +1009,42 @@ class IssueMemoryStore:
                 "variant_key": str(variant["variant_key"]),
                 "variant_count": variant_count,
                 "episode_count": episode_count,
-                "seeded_strategy_stats": seeded_learning['strategy_stat_updates'],
-                "seeded_variant_stat": seeded_learning['variant_stat_update'],
+                "seeded_strategy_stats": seeded_learning["strategy_stat_updates"],
+                "seeded_variant_stat": seeded_learning["variant_stat_update"],
                 "review_item": review_item,
             }
 
     def _decode_variant_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         data = dict(row)
         data["tags_json"] = self._json_loads(data.get("tags_json"), fallback=[])
-        data["applicability_json"] = self._json_loads(data.get("applicability_json"), fallback={})
-        data["negative_applicability_json"] = self._json_loads(data.get("negative_applicability_json"), fallback={})
-        data["entity_slots_json"] = self._json_loads(data.get("entity_slots_json"), fallback={})
-        data["strategy_hints_json"] = self._json_loads(data.get("strategy_hints_json"), fallback=[])
+        data["applicability_json"] = self._json_loads(
+            data.get("applicability_json"), fallback={}
+        )
+        data["negative_applicability_json"] = self._json_loads(
+            data.get("negative_applicability_json"), fallback={}
+        )
+        data["entity_slots_json"] = self._json_loads(
+            data.get("entity_slots_json"), fallback={}
+        )
+        data["strategy_hints_json"] = self._json_loads(
+            data.get("strategy_hints_json"), fallback=[]
+        )
         return data
 
     def _decode_episode_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         data = dict(row)
-        data["exception_types_json"] = self._json_loads(data.get("exception_types_json"), fallback=[])
-        data["query_tokens_json"] = self._json_loads(data.get("query_tokens_json"), fallback=[])
-        data["entity_slots_json"] = self._json_loads(data.get("entity_slots_json"), fallback={})
-        data["strategy_hints_json"] = self._json_loads(data.get("strategy_hints_json"), fallback=[])
+        data["exception_types_json"] = self._json_loads(
+            data.get("exception_types_json"), fallback=[]
+        )
+        data["query_tokens_json"] = self._json_loads(
+            data.get("query_tokens_json"), fallback=[]
+        )
+        data["entity_slots_json"] = self._json_loads(
+            data.get("entity_slots_json"), fallback={}
+        )
+        data["strategy_hints_json"] = self._json_loads(
+            data.get("strategy_hints_json"), fallback=[]
+        )
         data["env_json"] = self._json_loads(data.get("env_json"), fallback={})
         return data
 
@@ -912,7 +1060,9 @@ class IssueMemoryStore:
         episodes_limit: int = 10,
     ) -> PatternBundle | None:
         with self.managed_connection() as conn:
-            pattern = conn.execute("SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)).fetchone()
+            pattern = conn.execute(
+                "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+            ).fetchone()
             if pattern is None:
                 return None
             examples: list[dict[str, Any]] = []
@@ -951,11 +1101,18 @@ class IssueMemoryStore:
                     (pattern_id, episodes_limit),
                 ).fetchall()
                 episodes = [self._decode_episode_row(row) for row in rows]
-            return PatternBundle(pattern=dict(pattern), examples=examples, variants=variants, episodes=episodes)
+            return PatternBundle(
+                pattern=dict(pattern),
+                examples=examples,
+                variants=variants,
+                episodes=episodes,
+            )
 
     def _decode_review_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         data = dict(row)
-        data["entity_slots_json"] = self._json_loads(data.get("entity_slots_json"), fallback={})
+        data["entity_slots_json"] = self._json_loads(
+            data.get("entity_slots_json"), fallback={}
+        )
         data["metadata_json"] = self._json_loads(data.get("metadata_json"), fallback={})
         return data
 
@@ -996,12 +1153,16 @@ class IssueMemoryStore:
         )
         if cur.lastrowid is None:
             raise RuntimeError("Failed to determine review queue id after insert")
-        row = conn.execute("SELECT * FROM review_queue WHERE id = ?", (int(cur.lastrowid),)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM review_queue WHERE id = ?", (int(cur.lastrowid),)
+        ).fetchone()
         if row is None:
             raise RuntimeError("Review queue row missing after insert")
         return self._decode_review_row(row)
 
-    def list_review_queue(self, *, status: str = "pending", limit: int = 20) -> list[dict[str, Any]]:
+    def list_review_queue(
+        self, *, status: str = "pending", limit: int = 20
+    ) -> list[dict[str, Any]]:
         clauses = ["1=1"]
         params: list[Any] = []
         normalized_status = status.strip().lower()
@@ -1012,7 +1173,7 @@ class IssueMemoryStore:
             rows = conn.execute(
                 f"""
                 SELECT * FROM review_queue
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC, id DESC
                 LIMIT ?
                 """,
@@ -1020,9 +1181,19 @@ class IssueMemoryStore:
             ).fetchall()
             return [self._decode_review_row(row) for row in rows]
 
-    def resolve_review_item(self, *, review_id: int, decision: str, note: str = "") -> dict[str, Any] | None:
+    def resolve_review_item(
+        self, *, review_id: int, decision: str, note: str = ""
+    ) -> dict[str, Any] | None:
         normalized = decision.strip().lower()
-        if normalized not in {"approve", "approved", "reject", "rejected", "archive", "archived", "pending"}:
+        if normalized not in {
+            "approve",
+            "approved",
+            "reject",
+            "rejected",
+            "archive",
+            "archived",
+            "pending",
+        }:
             raise ValueError(f"Unsupported review decision: {decision}")
         resolved_status = {
             "approve": "approved",
@@ -1035,10 +1206,14 @@ class IssueMemoryStore:
         }[normalized]
         now = utc_now_iso()
         with self.managed_connection(immediate=True) as conn:
-            row = conn.execute("SELECT * FROM review_queue WHERE id = ?", (review_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM review_queue WHERE id = ?", (review_id,)
+            ).fetchone()
             if row is None:
                 return None
-            variant_id = int(row["variant_id"]) if row["variant_id"] is not None else None
+            variant_id = (
+                int(row["variant_id"]) if row["variant_id"] is not None else None
+            )
             if variant_id is not None:
                 if resolved_status == "approved":
                     conn.execute(
@@ -1071,10 +1246,14 @@ class IssueMemoryStore:
                     review_id,
                 ),
             )
-            updated = conn.execute("SELECT * FROM review_queue WHERE id = ?", (review_id,)).fetchone()
+            updated = conn.execute(
+                "SELECT * FROM review_queue WHERE id = ?", (review_id,)
+            ).fetchone()
             return self._decode_review_row(updated) if updated is not None else None
 
-    def query_repo_feedback_velocity(self, repo_name: str, *, window_days: int = 30, baseline_rate: float = 3.0) -> float:
+    def query_repo_feedback_velocity(
+        self, repo_name: str, *, window_days: int = 30, baseline_rate: float = 3.0
+    ) -> float:
         """Compute feedback velocity multiplier for a repo.
 
         Returns repo_velocity_multiplier = feedback_count_last_N_days / baseline_rate.
@@ -1082,7 +1261,11 @@ class IssueMemoryStore:
         """
         if not repo_name.strip():
             return 1.0
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(window_days, 1))).replace(microsecond=0).isoformat()
+        cutoff = (
+            (datetime.now(timezone.utc) - timedelta(days=max(window_days, 1)))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.managed_connection() as conn:
             row = conn.execute(
                 """
@@ -1099,7 +1282,11 @@ class IssueMemoryStore:
 
     def metrics_summary(self, *, window_days: int = 30) -> dict[str, Any]:
         window = max(int(window_days), 1)
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=window)).replace(microsecond=0).isoformat()
+        cutoff = (
+            (datetime.now(timezone.utc) - timedelta(days=window))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.managed_connection() as conn:
             retrieval_rows = conn.execute(
                 "SELECT retrieval_mode, decision_status, latency_ms, retrieval_latency_ms, ranking_latency_ms, bandit_latency_ms, decision_latency_ms FROM retrieval_events WHERE created_at >= ?",
@@ -1112,26 +1299,46 @@ class IssueMemoryStore:
             safe_override_count = int(
                 conn.execute(
                     "SELECT COUNT(DISTINCT retrieval_event_id) AS count FROM retrieval_candidates WHERE created_at >= ? AND reason_json LIKE ?",
-                    (cutoff, '%strategy-bandit-safe-override%'),
+                    (cutoff, "%strategy-bandit-safe-override%"),
                 ).fetchone()["count"]
             )
             shadow_promote_count = int(
                 conn.execute(
                     "SELECT COUNT(DISTINCT retrieval_event_id) AS count FROM retrieval_candidates WHERE created_at >= ? AND reason_json LIKE ?",
-                    (cutoff, '%strategy-bandit-shadow-promote%'),
+                    (cutoff, "%strategy-bandit-shadow-promote%"),
                 ).fetchone()["count"]
             )
             preference_hit_count = int(
                 conn.execute(
                     "SELECT COUNT(DISTINCT retrieval_event_id) AS count FROM retrieval_candidates WHERE created_at >= ? AND (reason_json LIKE ? OR reason_json LIKE ?)",
-                    (cutoff, '%preference-rule:%', '%avoidance-rule:%'),
+                    (cutoff, "%preference-rule:%", "%avoidance-rule:%"),
                 ).fetchone()["count"]
             )
-            pending_reviews = int(conn.execute("SELECT COUNT(*) AS count FROM review_queue WHERE status = 'pending'").fetchone()["count"])
-            provisional_variants = int(conn.execute("SELECT COUNT(*) AS count FROM issue_variants WHERE status = 'provisional'").fetchone()["count"])
-            archived_variants = int(conn.execute("SELECT COUNT(*) AS count FROM issue_variants WHERE status = 'archived'").fetchone()["count"])
-            total_patterns = int(conn.execute("SELECT COUNT(*) AS count FROM issue_patterns").fetchone()["count"])
-            total_variants = int(conn.execute("SELECT COUNT(*) AS count FROM issue_variants").fetchone()["count"])
+            pending_reviews = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM review_queue WHERE status = 'pending'"
+                ).fetchone()["count"]
+            )
+            provisional_variants = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM issue_variants WHERE status = 'provisional'"
+                ).fetchone()["count"]
+            )
+            archived_variants = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM issue_variants WHERE status = 'archived'"
+                ).fetchone()["count"]
+            )
+            total_patterns = int(
+                conn.execute("SELECT COUNT(*) AS count FROM issue_patterns").fetchone()[
+                    "count"
+                ]
+            )
+            total_variants = int(
+                conn.execute("SELECT COUNT(*) AS count FROM issue_variants").fetchone()[
+                    "count"
+                ]
+            )
             # 5.1: Strategy-level metrics
             strategy_rows = conn.execute(
                 """
@@ -1163,7 +1370,10 @@ class IssueMemoryStore:
         mode_counts: dict[str, int] = {}
         latencies: list[int] = []
         stage_latencies: dict[str, list[int]] = {
-            "retrieval": [], "ranking": [], "bandit": [], "decision": [],
+            "retrieval": [],
+            "ranking": [],
+            "bandit": [],
+            "decision": [],
         }
         for row in retrieval_rows:
             mode = str(row["retrieval_mode"])
@@ -1175,9 +1385,16 @@ class IssueMemoryStore:
             stage_latencies["ranking"].append(int(row["ranking_latency_ms"] or 0))
             stage_latencies["bandit"].append(int(row["bandit_latency_ms"] or 0))
             stage_latencies["decision"].append(int(row["decision_latency_ms"] or 0))
-        feedback_counts = {str(row["feedback_type"]): int(row["count"]) for row in feedback_rows}
-        feedback_event_counts = {str(row["feedback_type"]): int(row["retrieval_event_count"]) for row in feedback_rows}
-        visible_match_events = max(decision_counts.get("match", 0) + decision_counts.get("ambiguous", 0), 1)
+        feedback_counts = {
+            str(row["feedback_type"]): int(row["count"]) for row in feedback_rows
+        }
+        feedback_event_counts = {
+            str(row["feedback_type"]): int(row["retrieval_event_count"])
+            for row in feedback_rows
+        }
+        visible_match_events = max(
+            decision_counts.get("match", 0) + decision_counts.get("ambiguous", 0), 1
+        )
         # 5.1: Build per-strategy metrics
         strategy_fb: dict[str, dict[str, int]] = {}
         for row in strategy_feedback_rows:
@@ -1204,12 +1421,22 @@ class IssueMemoryStore:
                 "fp_rate": round(fp_count / max(suggestions, 1), 6),
                 "mean_reward": round(rewards / max(suggestions, 1), 6),
             }
-        backup_files = sorted(self.settings.backup_dir.glob("issue_memory_*.sqlite3"), key=lambda item: item.stat().st_mtime, reverse=True)
+        backup_files = sorted(
+            self.settings.backup_dir.glob("issue_memory_*.sqlite3"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
         latest_backup = backup_files[0] if backup_files else None
         latest_backup_age_hours = None
         if latest_backup is not None:
-            latest_backup_dt = datetime.fromtimestamp(latest_backup.stat().st_mtime, tz=timezone.utc)
-            latest_backup_age_hours = round((datetime.now(timezone.utc) - latest_backup_dt).total_seconds() / 3600.0, 3)
+            latest_backup_dt = datetime.fromtimestamp(
+                latest_backup.stat().st_mtime, tz=timezone.utc
+            )
+            latest_backup_age_hours = round(
+                (datetime.now(timezone.utc) - latest_backup_dt).total_seconds()
+                / 3600.0,
+                3,
+            )
         calibration_profile = self.load_calibration_profile()
         server_status = read_server_lifecycle_status(self.settings).to_dict()
         reports = self.list_saved_reports()
@@ -1217,7 +1444,9 @@ class IssueMemoryStore:
             "window_days": window,
             "database": {
                 "path": str(self.settings.db_path),
-                "bytes": self.settings.db_path.stat().st_size if self.settings.db_path.exists() else 0,
+                "bytes": self.settings.db_path.stat().st_size
+                if self.settings.db_path.exists()
+                else 0,
                 "patterns": total_patterns,
                 "variants": total_variants,
                 "provisional_variants": provisional_variants,
@@ -1244,23 +1473,41 @@ class IssueMemoryStore:
                     for stage, values in stage_latencies.items()
                 },
                 "safe_override_count": safe_override_count,
-                "safe_override_rate": round(safe_override_count / visible_match_events, 6),
+                "safe_override_rate": round(
+                    safe_override_count / visible_match_events, 6
+                ),
                 "shadow_promote_count": shadow_promote_count,
-                "shadow_promote_rate": round(shadow_promote_count / visible_match_events, 6),
+                "shadow_promote_rate": round(
+                    shadow_promote_count / visible_match_events, 6
+                ),
                 "preference_rule_hit_count": preference_hit_count,
             },
             "feedback": {
                 "counts": feedback_counts,
-                "verified_fix_conversion_rate": round(feedback_event_counts.get('fix_verified', 0) / visible_match_events, 6),
-                "false_positive_rate": round(feedback_event_counts.get('false_positive', 0) / visible_match_events, 6),
-                "fp_alarm": round(feedback_event_counts.get('false_positive', 0) / visible_match_events, 6) >= self.settings.fp_rate_alarm_threshold,
+                "verified_fix_conversion_rate": round(
+                    feedback_event_counts.get("fix_verified", 0) / visible_match_events,
+                    6,
+                ),
+                "false_positive_rate": round(
+                    feedback_event_counts.get("false_positive", 0)
+                    / visible_match_events,
+                    6,
+                ),
+                "fp_alarm": round(
+                    feedback_event_counts.get("false_positive", 0)
+                    / visible_match_events,
+                    6,
+                )
+                >= self.settings.fp_rate_alarm_threshold,
             },
             "strategy": strategy_metrics,
             "review_queue": {
                 "pending": pending_reviews,
             },
             "backups": {
-                "latest_path": str(latest_backup) if latest_backup is not None else None,
+                "latest_path": str(latest_backup)
+                if latest_backup is not None
+                else None,
                 "latest_age_hours": latest_backup_age_hours,
             },
             "server": server_status,
@@ -1268,8 +1515,12 @@ class IssueMemoryStore:
                 "enabled": bool(self.settings.enable_calibration_profile),
                 "profile_path": str(self.settings.calibration_profile_path),
                 "has_profile": bool(calibration_profile),
-                "profile_version": calibration_profile.get('version') if isinstance(calibration_profile, dict) else None,
-                "profile_updated_at": calibration_profile.get('generated_at') if isinstance(calibration_profile, dict) else None,
+                "profile_version": calibration_profile.get("version")
+                if isinstance(calibration_profile, dict)
+                else None,
+                "profile_updated_at": calibration_profile.get("generated_at")
+                if isinstance(calibration_profile, dict)
+                else None,
             },
             "reports": reports,
         }
@@ -1280,14 +1531,34 @@ class IssueMemoryStore:
         telemetry_retention_days: int | None = None,
         resolved_review_retention_days: int | None = None,
     ) -> dict[str, int]:
-        telemetry_days = telemetry_retention_days or self.settings.telemetry_retention_days
-        review_days = resolved_review_retention_days or self.settings.resolved_review_retention_days
-        telemetry_cutoff = (datetime.now(timezone.utc) - timedelta(days=max(int(telemetry_days), 1))).replace(microsecond=0).isoformat()
-        review_cutoff = (datetime.now(timezone.utc) - timedelta(days=max(int(review_days), 1))).replace(microsecond=0).isoformat()
+        telemetry_days = (
+            telemetry_retention_days or self.settings.telemetry_retention_days
+        )
+        review_days = (
+            resolved_review_retention_days
+            or self.settings.resolved_review_retention_days
+        )
+        telemetry_cutoff = (
+            (datetime.now(timezone.utc) - timedelta(days=max(int(telemetry_days), 1)))
+            .replace(microsecond=0)
+            .isoformat()
+        )
+        review_cutoff = (
+            (datetime.now(timezone.utc) - timedelta(days=max(int(review_days), 1)))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.managed_connection(immediate=True) as conn:
             expired_session_rows = self._purge_expired_session_memory_tx(conn)
-            retrieval_count = int(conn.execute("SELECT COUNT(*) AS count FROM retrieval_events WHERE created_at < ?", (telemetry_cutoff,)).fetchone()["count"])
-            conn.execute("DELETE FROM retrieval_events WHERE created_at < ?", (telemetry_cutoff,))
+            retrieval_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM retrieval_events WHERE created_at < ?",
+                    (telemetry_cutoff,),
+                ).fetchone()["count"]
+            )
+            conn.execute(
+                "DELETE FROM retrieval_events WHERE created_at < ?", (telemetry_cutoff,)
+            )
             review_count = int(
                 conn.execute(
                     "SELECT COUNT(*) AS count FROM review_queue WHERE status != 'pending' AND COALESCE(resolved_at, created_at) < ?",
@@ -1304,7 +1575,9 @@ class IssueMemoryStore:
             "resolved_reviews_deleted": review_count,
         }
 
-    def recent_patterns(self, *, limit: int = 5, project_scope: str = "") -> list[dict[str, Any]]:
+    def recent_patterns(
+        self, *, limit: int = 5, project_scope: str = ""
+    ) -> list[dict[str, Any]]:
         with self.managed_connection() as conn:
             if project_scope:
                 rows = conn.execute(
@@ -1335,17 +1608,23 @@ class IssueMemoryStore:
         """Return deterministic hybrid candidates without unrelated fallback."""
         candidate_meta: dict[int, dict[str, Any]] = {}
 
-        def _register(rows: list[sqlite3.Row], rank_key: str, bm25_key: str | None = None) -> None:
+        def _register(
+            rows: list[sqlite3.Row], rank_key: str, bm25_key: str | None = None
+        ) -> None:
             for rank, row in enumerate(rows, start=1):
                 pattern_id = int(row["id"])
-                meta = candidate_meta.setdefault(pattern_id, self._default_candidate_meta())
+                meta = candidate_meta.setdefault(
+                    pattern_id, self._default_candidate_meta()
+                )
                 if meta[rank_key] is None:
                     meta[rank_key] = rank
                 if bm25_key and bm25_key in row.keys() and meta[bm25_key] is None:
                     meta[bm25_key] = float(row[bm25_key])
 
         with self.managed_connection() as conn:
-            scope_predicate, scope_predicate_args, scope_order, scope_order_args = self._scope_predicate(project_scope)
+            scope_predicate, scope_predicate_args, scope_order, scope_order_args = (
+                self._scope_predicate(project_scope)
+            )
 
             if error_family and error_family != "generic_runtime_error":
                 rows = conn.execute(
@@ -1397,14 +1676,24 @@ class IssueMemoryStore:
                     ORDER BY bm25(issue_examples_fts), {scope_order}, e.created_at DESC, e.id ASC
                     LIMIT ?
                     """,
-                    [fts_query, *scope_predicate_args, *scope_order_args, max(limit * 3, limit)],
+                    [
+                        fts_query,
+                        *scope_predicate_args,
+                        *scope_order_args,
+                        max(limit * 3, limit),
+                    ],
                 ).fetchall()
                 _register(rows, "example_fts_rank", "example_bm25")
 
             if not candidate_meta:
                 return []
 
-            ordered_ids = sorted(candidate_meta, key=lambda pattern_id: self._raw_candidate_sort_key(candidate_meta[pattern_id], pattern_id))[:limit]
+            ordered_ids = sorted(
+                candidate_meta,
+                key=lambda pattern_id: self._raw_candidate_sort_key(
+                    candidate_meta[pattern_id], pattern_id
+                ),
+            )[:limit]
             placeholders = ", ".join(["?"] * len(ordered_ids))
             pattern_rows = conn.execute(
                 f"SELECT * FROM issue_patterns WHERE id IN ({placeholders})",
@@ -1460,18 +1749,24 @@ class IssueMemoryStore:
         """Return hybrid variant candidates backed by pattern, variant and episode evidence."""
         candidate_meta: dict[tuple[int, int], dict[str, Any]] = {}
 
-        def _register(rows: list[sqlite3.Row], rank_key: str, bm25_key: str | None = None) -> None:
+        def _register(
+            rows: list[sqlite3.Row], rank_key: str, bm25_key: str | None = None
+        ) -> None:
             for rank, row in enumerate(rows, start=1):
                 pattern_id = int(row["pattern_id"])
                 variant_id = int(row["variant_id"])
-                meta = candidate_meta.setdefault((pattern_id, variant_id), self._default_variant_candidate_meta())
+                meta = candidate_meta.setdefault(
+                    (pattern_id, variant_id), self._default_variant_candidate_meta()
+                )
                 if meta[rank_key] is None:
                     meta[rank_key] = rank
                 if bm25_key and bm25_key in row.keys() and meta[bm25_key] is None:
                     meta[bm25_key] = float(row[bm25_key])
 
         with self.managed_connection() as conn:
-            scope_predicate, scope_predicate_args, scope_order, scope_order_args = self._scope_predicate(project_scope)
+            scope_predicate, scope_predicate_args, scope_order, scope_order_args = (
+                self._scope_predicate(project_scope)
+            )
 
             if error_family and error_family != "generic_runtime_error":
                 rows = conn.execute(
@@ -1512,7 +1807,12 @@ class IssueMemoryStore:
                     ORDER BY bm25(issue_variants_fts), {scope_order}, v.updated_at DESC, v.id ASC
                     LIMIT ?
                     """,
-                    [fts_query, *scope_predicate_args, *scope_order_args, max(limit * 2, limit)],
+                    [
+                        fts_query,
+                        *scope_predicate_args,
+                        *scope_order_args,
+                        max(limit * 2, limit),
+                    ],
                 ).fetchall()
                 _register(rows, "variant_fts_rank", "variant_bm25")
 
@@ -1527,7 +1827,12 @@ class IssueMemoryStore:
                     ORDER BY bm25(issue_episodes_fts), {scope_order}, e.resolved_at DESC, e.id ASC
                     LIMIT ?
                     """,
-                    [fts_query, *scope_predicate_args, *scope_order_args, max(limit * 3, limit)],
+                    [
+                        fts_query,
+                        *scope_predicate_args,
+                        *scope_order_args,
+                        max(limit * 3, limit),
+                    ],
                 ).fetchall()
                 _register(rows, "episode_fts_rank", "episode_bm25")
 
@@ -1541,7 +1846,12 @@ class IssueMemoryStore:
                     ORDER BY bm25(issue_patterns_fts), {scope_order}, v.confidence DESC, v.updated_at DESC, v.id ASC
                     LIMIT ?
                     """,
-                    [fts_query, *scope_predicate_args, *scope_order_args, max(limit * 2, limit)],
+                    [
+                        fts_query,
+                        *scope_predicate_args,
+                        *scope_order_args,
+                        max(limit * 2, limit),
+                    ],
                 ).fetchall()
                 _register(rows, "pattern_fts_rank", "pattern_bm25")
 
@@ -1550,10 +1860,14 @@ class IssueMemoryStore:
 
             ordered_pairs = sorted(
                 candidate_meta,
-                key=lambda pair: self._raw_variant_candidate_sort_key(candidate_meta[pair], pair[0], pair[1]),
+                key=lambda pair: self._raw_variant_candidate_sort_key(
+                    candidate_meta[pair], pair[0], pair[1]
+                ),
             )[:limit]
             variant_ids = [variant_id for _pattern_id, variant_id in ordered_pairs]
-            pattern_ids = list(dict.fromkeys(pattern_id for pattern_id, _variant_id in ordered_pairs))
+            pattern_ids = list(
+                dict.fromkeys(pattern_id for pattern_id, _variant_id in ordered_pairs)
+            )
             variant_placeholders = ", ".join(["?"] * len(variant_ids))
             pattern_placeholders = ", ".join(["?"] * len(pattern_ids))
 
@@ -1631,7 +1945,9 @@ class IssueMemoryStore:
                 pattern_ids,
             ).fetchall()
 
-        rows_by_variant: dict[int, dict[str, Any]] = {int(row["variant_id"]): dict(row) for row in variant_rows}
+        rows_by_variant: dict[int, dict[str, Any]] = {
+            int(row["variant_id"]): dict(row) for row in variant_rows
+        }
         examples_by_pattern: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for row in example_rows:
             row_dict = dict(row)
@@ -1656,8 +1972,12 @@ class IssueMemoryStore:
                 "pattern_id": int(row["pattern_id"]),
                 "variant_key": str(row["variant_key"]),
                 "title": str(row["variant_title"]),
-                "applicability_json": self._json_loads(row.get("applicability_json"), fallback={}),
-                "negative_applicability_json": self._json_loads(row.get("negative_applicability_json"), fallback={}),
+                "applicability_json": self._json_loads(
+                    row.get("applicability_json"), fallback={}
+                ),
+                "negative_applicability_json": self._json_loads(
+                    row.get("negative_applicability_json"), fallback={}
+                ),
                 "repo_fingerprint": str(row.get("repo_fingerprint", "")),
                 "env_fingerprint": str(row.get("env_fingerprint", "")),
                 "command_signature": str(row.get("command_signature", "")),
@@ -1671,8 +1991,12 @@ class IssueMemoryStore:
                 "tags_json": self._json_loads(row.get("tags_json"), fallback=[]),
                 "search_text": str(row.get("variant_search_text", "")),
                 "strategy_key": str(row.get("variant_strategy_key", "")),
-                "entity_slots_json": self._json_loads(row.get("variant_entity_slots_json"), fallback={}),
-                "strategy_hints_json": self._json_loads(row.get("variant_strategy_hints_json"), fallback=[]),
+                "entity_slots_json": self._json_loads(
+                    row.get("variant_entity_slots_json"), fallback={}
+                ),
+                "strategy_hints_json": self._json_loads(
+                    row.get("variant_strategy_hints_json"), fallback=[]
+                ),
                 "status": str(row.get("variant_status", "active")),
                 "times_used": int(row.get("times_used", 0)),
                 "success_count": int(row.get("success_count", 0)),
@@ -1716,7 +2040,9 @@ class IssueMemoryStore:
                     "created_at": str(row["pattern_created_at"]),
                     "updated_at": str(row["pattern_updated_at"]),
                     "best_variant": variant,
-                    "variant_match_score": round(min(max(variant_match_score, 0.0), 1.0), 6),
+                    "variant_match_score": round(
+                        min(max(variant_match_score, 0.0), 1.0), 6
+                    ),
                     "episodes": episodes_by_variant.get(variant_id, []),
                     "examples": examples_by_pattern.get(pattern_id, []),
                     "retrieval_signals": meta,
@@ -1731,39 +2057,49 @@ class IssueMemoryStore:
             return 0.5
         return float(alpha) / total
 
-    def _decode_strategy_stat_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _decode_strategy_stat_row(
+        self, row: sqlite3.Row | dict[str, Any]
+    ) -> dict[str, Any]:
         data = dict(row)
-        alpha = float(data.get('alpha', STRATEGY_PRIOR_ALPHA))
-        beta = float(data.get('beta', STRATEGY_PRIOR_BETA))
-        data['alpha'] = alpha
-        data['beta'] = beta
-        data['success_count'] = int(data.get('success_count', 0))
-        data['failure_count'] = int(data.get('failure_count', 0))
-        data['posterior_mean'] = self._posterior_mean(alpha, beta)
-        data['effective_observations'] = max(alpha + beta - STRATEGY_PRIOR_ALPHA - STRATEGY_PRIOR_BETA, 0.0)
+        alpha = float(data.get("alpha", STRATEGY_PRIOR_ALPHA))
+        beta = float(data.get("beta", STRATEGY_PRIOR_BETA))
+        data["alpha"] = alpha
+        data["beta"] = beta
+        data["success_count"] = int(data.get("success_count", 0))
+        data["failure_count"] = int(data.get("failure_count", 0))
+        data["posterior_mean"] = self._posterior_mean(alpha, beta)
+        data["effective_observations"] = max(
+            alpha + beta - STRATEGY_PRIOR_ALPHA - STRATEGY_PRIOR_BETA, 0.0
+        )
         # Multi-factor posteriors (Phase 3.1)
-        for factor in ('quality', 'safety', 'adoption'):
-            fa = float(data.get(f'{factor}_alpha', STRATEGY_PRIOR_ALPHA))
-            fb = float(data.get(f'{factor}_beta', STRATEGY_PRIOR_BETA))
-            data[f'{factor}_alpha'] = fa
-            data[f'{factor}_beta'] = fb
-            data[f'{factor}_mean'] = self._posterior_mean(fa, fb)
+        for factor in ("quality", "safety", "adoption"):
+            fa = float(data.get(f"{factor}_alpha", STRATEGY_PRIOR_ALPHA))
+            fb = float(data.get(f"{factor}_beta", STRATEGY_PRIOR_BETA))
+            data[f"{factor}_alpha"] = fa
+            data[f"{factor}_beta"] = fb
+            data[f"{factor}_mean"] = self._posterior_mean(fa, fb)
         return data
 
-    def _decode_variant_stat_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _decode_variant_stat_row(
+        self, row: sqlite3.Row | dict[str, Any]
+    ) -> dict[str, Any]:
         data = dict(row)
-        alpha = float(data.get('alpha', VARIANT_PRIOR_ALPHA))
-        beta = float(data.get('beta', VARIANT_PRIOR_BETA))
-        data['alpha'] = alpha
-        data['beta'] = beta
-        data['success_count'] = int(data.get('success_count', 0))
-        data['failure_count'] = int(data.get('failure_count', 0))
-        data['posterior_mean'] = self._posterior_mean(alpha, beta)
-        data['effective_observations'] = max(alpha + beta - VARIANT_PRIOR_ALPHA - VARIANT_PRIOR_BETA, 0.0)
+        alpha = float(data.get("alpha", VARIANT_PRIOR_ALPHA))
+        beta = float(data.get("beta", VARIANT_PRIOR_BETA))
+        data["alpha"] = alpha
+        data["beta"] = beta
+        data["success_count"] = int(data.get("success_count", 0))
+        data["failure_count"] = int(data.get("failure_count", 0))
+        data["posterior_mean"] = self._posterior_mean(alpha, beta)
+        data["effective_observations"] = max(
+            alpha + beta - VARIANT_PRIOR_ALPHA - VARIANT_PRIOR_BETA, 0.0
+        )
         return data
 
-    def get_strategy_stat(self, *, scope_type: str, scope_key: str, strategy_key: str) -> dict[str, Any] | None:
-        normalized_scope_key = '' if scope_type == 'global' else scope_key.strip()
+    def get_strategy_stat(
+        self, *, scope_type: str, scope_key: str, strategy_key: str
+    ) -> dict[str, Any] | None:
+        normalized_scope_key = "" if scope_type == "global" else scope_key.strip()
         with self.managed_connection() as conn:
             row = conn.execute(
                 """
@@ -1790,8 +2126,14 @@ class IssueMemoryStore:
         repo_name: str = "",
         user_scope: str = "",
     ) -> dict[str, Any]:
-        normalized_strategy_keys = list(dict.fromkeys(key.strip() for key in strategy_keys if key.strip()))
-        normalized_variant_ids = list(dict.fromkeys(int(variant_id) for variant_id in variant_ids if int(variant_id) > 0))
+        normalized_strategy_keys = list(
+            dict.fromkeys(key.strip() for key in strategy_keys if key.strip())
+        )
+        normalized_variant_ids = list(
+            dict.fromkeys(
+                int(variant_id) for variant_id in variant_ids if int(variant_id) > 0
+            )
+        )
         result: dict[str, Any] = {
             "global": {},
             "repo": {},
@@ -1801,8 +2143,12 @@ class IssueMemoryStore:
         with self.managed_connection() as conn:
             if normalized_strategy_keys:
                 placeholders = ", ".join(["?"] * len(normalized_strategy_keys))
-                for scope_type, scope_key in self._strategy_scope_entries(repo_name=repo_name, user_scope=user_scope):
-                    normalized_scope_key = self._normalized_scope_key(scope_type, scope_key)
+                for scope_type, scope_key in self._strategy_scope_entries(
+                    repo_name=repo_name, user_scope=user_scope
+                ):
+                    normalized_scope_key = self._normalized_scope_key(
+                        scope_type, scope_key
+                    )
                     rows = conn.execute(
                         f"""
                         SELECT * FROM strategy_stats
@@ -1842,11 +2188,17 @@ class IssueMemoryStore:
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
             d = dict(row)
-            for factor in ('quality', 'safety', 'adoption'):
-                d[f'{factor}_alpha'] = float(d.get(f'{factor}_alpha', STRATEGY_PRIOR_ALPHA))
-                d[f'{factor}_beta'] = float(d.get(f'{factor}_beta', STRATEGY_PRIOR_BETA))
-                d[f'{factor}_mean'] = self._posterior_mean(d[f'{factor}_alpha'], d[f'{factor}_beta'])
-            result[str(d['family_key'])] = d
+            for factor in ("quality", "safety", "adoption"):
+                d[f"{factor}_alpha"] = float(
+                    d.get(f"{factor}_alpha", STRATEGY_PRIOR_ALPHA)
+                )
+                d[f"{factor}_beta"] = float(
+                    d.get(f"{factor}_beta", STRATEGY_PRIOR_BETA)
+                )
+                d[f"{factor}_mean"] = self._posterior_mean(
+                    d[f"{factor}_alpha"], d[f"{factor}_beta"]
+                )
+            result[str(d["family_key"])] = d
         return result
 
     def _update_family_stat_tx(
@@ -1860,6 +2212,7 @@ class IssueMemoryStore:
     ) -> None:
         """Update or create a strategy_families row after a child strategy update (Phase 3.2)."""
         from .learning.families import STRATEGY_FAMILIES
+
         if not family_key.strip():
             return
         members_json = self._json_dumps(STRATEGY_FAMILIES.get(family_key, []))
@@ -1876,11 +2229,17 @@ class IssueMemoryStore:
                     adoption_alpha, adoption_beta, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (family_key, members_json,
-                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
-                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
-                 STRATEGY_PRIOR_ALPHA, STRATEGY_PRIOR_BETA,
-                 now),
+                (
+                    family_key,
+                    members_json,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
+                    STRATEGY_PRIOR_ALPHA,
+                    STRATEGY_PRIOR_BETA,
+                    now,
+                ),
             )
             row = conn.execute(
                 "SELECT * FROM strategy_families WHERE family_key = ?",
@@ -1888,23 +2247,23 @@ class IssueMemoryStore:
             ).fetchone()
         assert row is not None
         rd = dict(row)
-        qa = float(rd.get('quality_alpha', STRATEGY_PRIOR_ALPHA))
-        qb = float(rd.get('quality_beta', STRATEGY_PRIOR_BETA))
-        sa = float(rd.get('safety_alpha', STRATEGY_PRIOR_ALPHA))
-        sb = float(rd.get('safety_beta', STRATEGY_PRIOR_BETA))
-        aa = float(rd.get('adoption_alpha', STRATEGY_PRIOR_ALPHA))
-        ab_val = float(rd.get('adoption_beta', STRATEGY_PRIOR_BETA))
+        qa = float(rd.get("quality_alpha", STRATEGY_PRIOR_ALPHA))
+        qb = float(rd.get("quality_beta", STRATEGY_PRIOR_BETA))
+        sa = float(rd.get("safety_alpha", STRATEGY_PRIOR_ALPHA))
+        sb = float(rd.get("safety_beta", STRATEGY_PRIOR_BETA))
+        aa = float(rd.get("adoption_alpha", STRATEGY_PRIOR_ALPHA))
+        ab_val = float(rd.get("adoption_beta", STRATEGY_PRIOR_BETA))
         ft = feedback_type.strip().lower()
-        if ft == 'fix_verified':
+        if ft == "fix_verified":
             qa += 1.0
-        elif ft == 'false_positive':
+        elif ft == "false_positive":
             qb += 1.0
             sb += 1.0
-        elif ft in ('candidate_accepted', 'merge_confirmed', 'split_confirmed'):
+        elif ft in ("candidate_accepted", "merge_confirmed", "split_confirmed"):
             aa += 1.0
-        elif ft in ('candidate_rejected', 'merge_rejected', 'split_rejected'):
+        elif ft in ("candidate_rejected", "merge_rejected", "split_rejected"):
             ab_val += 1.0
-        if success and ft != 'false_positive':
+        if success and ft != "false_positive":
             sa += 1.0
         conn.execute(
             """
@@ -1944,18 +2303,23 @@ class IssueMemoryStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)
                 """,
                 (
-                    experiment_id, name, description,
+                    experiment_id,
+                    name,
+                    description,
                     self._json_dumps(treatment_config or {}),
                     self._json_dumps(control_config or {}),
                     max(0.0, min(1.0, traffic_fraction)),
-                    now, now,
+                    now,
+                    now,
                 ),
             )
         return {"experiment_id": experiment_id, "status": "draft", "created_at": now}
 
-    def update_experiment_status(self, experiment_id: str, status: str) -> dict[str, Any]:
+    def update_experiment_status(
+        self, experiment_id: str, status: str
+    ) -> dict[str, Any]:
         """Transition an experiment to a new status."""
-        valid = ('draft', 'running', 'paused', 'completed', 'cancelled')
+        valid = ("draft", "running", "paused", "completed", "cancelled")
         if status not in valid:
             raise ValueError(f"Invalid experiment status: {status!r}")
         now = utc_now_iso()
@@ -1989,8 +2353,12 @@ class IssueMemoryStore:
         if row is None:
             return None
         d = dict(row)
-        d["treatment_config"] = self._json_loads(d.pop("treatment_config_json", "{}"), fallback={})
-        d["control_config"] = self._json_loads(d.pop("control_config_json", "{}"), fallback={})
+        d["treatment_config"] = self._json_loads(
+            d.pop("treatment_config_json", "{}"), fallback={}
+        )
+        d["control_config"] = self._json_loads(
+            d.pop("control_config_json", "{}"), fallback={}
+        )
         d["traffic_fraction"] = float(d.get("traffic_fraction", 0.5))
         return d
 
@@ -1998,6 +2366,7 @@ class IssueMemoryStore:
     def assign_experiment_arm(experiment: dict[str, Any], session_id: str) -> str:
         """Deterministic arm assignment via consistent hash on session_id."""
         import hashlib
+
         exp_id = str(experiment.get("experiment_id", ""))
         digest = hashlib.sha256(f"{exp_id}:{session_id}".encode()).hexdigest()
         bucket = int(digest[:8], 16) / 0xFFFFFFFF
@@ -2030,7 +2399,13 @@ class IssueMemoryStore:
                     (experiment_id, arm),
                 ).fetchone()
                 if rows is None:
-                    arms[arm] = {"total": 0, "matches": 0, "abstains": 0, "avg_confidence": 0.0, "avg_latency_ms": 0.0}
+                    arms[arm] = {
+                        "total": 0,
+                        "matches": 0,
+                        "abstains": 0,
+                        "avg_confidence": 0.0,
+                        "avg_latency_ms": 0.0,
+                    }
                 else:
                     d = dict(rows)
                     total = int(d.get("total", 0) or 0)
@@ -2038,9 +2413,15 @@ class IssueMemoryStore:
                         "total": total,
                         "matches": int(d.get("matches", 0) or 0),
                         "abstains": int(d.get("abstains", 0) or 0),
-                        "match_rate": round(int(d.get("matches", 0) or 0) / total, 4) if total else 0.0,
-                        "avg_confidence": round(float(d.get("avg_confidence", 0) or 0), 4),
-                        "avg_latency_ms": round(float(d.get("avg_latency_ms", 0) or 0), 2),
+                        "match_rate": round(int(d.get("matches", 0) or 0) / total, 4)
+                        if total
+                        else 0.0,
+                        "avg_confidence": round(
+                            float(d.get("avg_confidence", 0) or 0), 4
+                        ),
+                        "avg_latency_ms": round(
+                            float(d.get("avg_latency_ms", 0) or 0), 2
+                        ),
                     }
         return {
             "experiment_id": experiment_id,
@@ -2048,11 +2429,15 @@ class IssueMemoryStore:
             "arms": arms,
         }
 
-    def _decode_preference_rule_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _decode_preference_rule_row(
+        self, row: sqlite3.Row | dict[str, Any]
+    ) -> dict[str, Any]:
         data = dict(row)
         data["weight"] = float(data.get("weight", 0.0))
         data["active"] = bool(int(data.get("active", 1)))
-        data["condition_json"] = self._json_loads(data.get("condition_json"), fallback={})
+        data["condition_json"] = self._json_loads(
+            data.get("condition_json"), fallback={}
+        )
         return data
 
     @staticmethod
@@ -2086,25 +2471,51 @@ class IssueMemoryStore:
                 return 0.0
             score += 0.18
 
-        command_tokens = [str(token).strip().lower() for token in condition.get("command_tokens", []) if str(token).strip()]
+        command_tokens = [
+            str(token).strip().lower()
+            for token in condition.get("command_tokens", [])
+            if str(token).strip()
+        ]
         if command_tokens:
-            profile_command_tokens = [str(token).strip().lower() for token in getattr(profile, "command_tokens", []) if str(token).strip()]
-            overlap = self._token_overlap_fraction(profile_command_tokens, command_tokens)
+            profile_command_tokens = [
+                str(token).strip().lower()
+                for token in getattr(profile, "command_tokens", [])
+                if str(token).strip()
+            ]
+            overlap = self._token_overlap_fraction(
+                profile_command_tokens, command_tokens
+            )
             if overlap <= 0.0:
                 return 0.0
             score += 0.14 * overlap
 
-        path_tokens = [str(token).strip().lower() for token in condition.get("path_tokens", []) if str(token).strip()]
+        path_tokens = [
+            str(token).strip().lower()
+            for token in condition.get("path_tokens", [])
+            if str(token).strip()
+        ]
         if path_tokens:
-            profile_path_tokens = [str(token).strip().lower() for token in getattr(profile, "path_tokens", []) if str(token).strip()]
+            profile_path_tokens = [
+                str(token).strip().lower()
+                for token in getattr(profile, "path_tokens", [])
+                if str(token).strip()
+            ]
             overlap = self._token_overlap_fraction(profile_path_tokens, path_tokens)
             if overlap <= 0.0:
                 return 0.0
             score += 0.14 * overlap
 
-        strategy_hints = [str(token).strip().lower() for token in condition.get("strategy_hints", []) if str(token).strip()]
+        strategy_hints = [
+            str(token).strip().lower()
+            for token in condition.get("strategy_hints", [])
+            if str(token).strip()
+        ]
         if strategy_hints:
-            profile_hints = [str(token).strip().lower() for token in getattr(profile, "strategy_hints", []) if str(token).strip()]
+            profile_hints = [
+                str(token).strip().lower()
+                for token in getattr(profile, "strategy_hints", [])
+                if str(token).strip()
+            ]
             overlap = self._token_overlap_fraction(profile_hints, strategy_hints)
             if overlap > 0.0:
                 score += 0.10 * overlap
@@ -2115,7 +2526,9 @@ class IssueMemoryStore:
         scope_type = str(payload.get("scope_type", "global")).strip() or "global"
         if scope_type not in {"global", "repo", "user"}:
             raise ValueError(f"Unsupported preference scope_type: {scope_type}")
-        scope_key = self._normalized_scope_key(scope_type, str(payload.get("scope_key", "")))
+        scope_key = self._normalized_scope_key(
+            scope_type, str(payload.get("scope_key", ""))
+        )
         project_scope = str(payload.get("project_scope", "global")).strip() or "global"
         repo_name = str(payload.get("repo_name", "")).strip()
         error_family = str(payload.get("error_family", "")).strip()
@@ -2136,7 +2549,16 @@ class IssueMemoryStore:
                 WHERE scope_type = ? AND scope_key = ? AND project_scope = ? AND repo_name = ?
                   AND error_family = ? AND strategy_key = ? AND instruction = ? AND source = ?
                 """,
-                (scope_type, scope_key, project_scope, repo_name, error_family, strategy_key, instruction, source),
+                (
+                    scope_type,
+                    scope_key,
+                    project_scope,
+                    repo_name,
+                    error_family,
+                    strategy_key,
+                    instruction,
+                    source,
+                ),
             ).fetchone()
             if existing is None:
                 cur = conn.execute(
@@ -2164,7 +2586,9 @@ class IssueMemoryStore:
                     ),
                 )
                 if cur.lastrowid is None:
-                    raise RuntimeError("Failed to determine preference rule id after insert")
+                    raise RuntimeError(
+                        "Failed to determine preference rule id after insert"
+                    )
                 rule_id = int(cur.lastrowid)
             else:
                 rule_id = int(existing["id"])
@@ -2176,9 +2600,13 @@ class IssueMemoryStore:
                     """,
                     (weight, self._json_dumps(condition), active, now, rule_id),
                 )
-            row = conn.execute("SELECT * FROM preference_rules WHERE id = ?", (rule_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM preference_rules WHERE id = ?", (rule_id,)
+            ).fetchone()
             if row is None:
-                raise RuntimeError("Preference rule row could not be loaded after upsert")
+                raise RuntimeError(
+                    "Preference rule row could not be loaded after upsert"
+                )
             return self._decode_preference_rule_row(row)
 
     def list_preference_rules(
@@ -2211,7 +2639,7 @@ class IssueMemoryStore:
             rows = conn.execute(
                 f"""
                 SELECT * FROM preference_rules
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY
                     CASE scope_type WHEN 'user' THEN 0 WHEN 'repo' THEN 1 ELSE 2 END,
                     ABS(weight) DESC,
@@ -2229,7 +2657,9 @@ class IssueMemoryStore:
         project_scope: str,
         limit: int = 12,
     ) -> list[dict[str, Any]]:
-        normalized_project_scope = project_scope.strip() or str(getattr(profile, "project_scope", "global") or "global")
+        normalized_project_scope = project_scope.strip() or str(
+            getattr(profile, "project_scope", "global") or "global"
+        )
         repo_name = str(getattr(profile, "repo_name", "") or "").strip()
         user_scope = str(getattr(profile, "user_scope", "") or "").strip()
         error_family = str(getattr(profile, "error_family", "") or "").strip()
@@ -2264,7 +2694,7 @@ class IssueMemoryStore:
             rows = conn.execute(
                 f"""
                 SELECT * FROM preference_rules
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY
                     CASE scope_type WHEN 'user' THEN 0 WHEN 'repo' THEN 1 ELSE 2 END,
                     CASE WHEN project_scope = ? THEN 0 WHEN project_scope = 'global' THEN 1 ELSE 2 END,
@@ -2279,7 +2709,11 @@ class IssueMemoryStore:
         matched: list[dict[str, Any]] = []
         for row in rows:
             data = self._decode_preference_rule_row(row)
-            project_weight = 1.0 if str(data.get("project_scope", "global")) == normalized_project_scope else 0.86
+            project_weight = (
+                1.0
+                if str(data.get("project_scope", "global")) == normalized_project_scope
+                else 0.86
+            )
             family_value = str(data.get("error_family", "")).strip()
             if family_value and family_value == error_family and error_family:
                 family_weight = 1.0
@@ -2287,7 +2721,10 @@ class IssueMemoryStore:
                 family_weight = 0.78
             elif error_family == "generic_runtime_error":
                 family_weight = 0.72
-            elif family_value == "generic_runtime_error" and error_family == "generic_runtime_error":
+            elif (
+                family_value == "generic_runtime_error"
+                and error_family == "generic_runtime_error"
+            ):
                 family_weight = 0.88
             else:
                 family_weight = 0.0
@@ -2301,7 +2738,9 @@ class IssueMemoryStore:
             if condition_score <= 0.0:
                 continue
             scope_weight = scoped_weight.get(str(data.get("scope_type", "global")), 0.8)
-            match_score = scope_weight * project_weight * family_weight * condition_score
+            match_score = (
+                scope_weight * project_weight * family_weight * condition_score
+            )
             data["scope_weight"] = round(scope_weight, 6)
             data["project_weight"] = round(project_weight, 6)
             data["family_weight"] = round(family_weight, 6)
@@ -2311,13 +2750,19 @@ class IssueMemoryStore:
 
         matched.sort(
             key=lambda item: (
-                -abs(float(item.get("weight", 0.0)) * float(item.get("match_score", 0.0))),
-                0 if str(item.get("scope_type", "")) == "user" else 1 if str(item.get("scope_type", "")) == "repo" else 2,
+                -abs(
+                    float(item.get("weight", 0.0)) * float(item.get("match_score", 0.0))
+                ),
+                0
+                if str(item.get("scope_type", "")) == "user"
+                else 1
+                if str(item.get("scope_type", "")) == "repo"
+                else 2,
                 str(item.get("strategy_key", "")),
                 -float(item.get("weight", 0.0)),
             )
         )
-        return matched[:max(limit, 1)]
+        return matched[: max(limit, 1)]
 
     def decode_feature_json(self, value: Any) -> dict[str, float]:
         raw = self._json_loads(value, fallback={})
@@ -2330,7 +2775,6 @@ class IssueMemoryStore:
             except (TypeError, ValueError):
                 continue
         return decoded
-
 
     def upsert_embedding(
         self,
@@ -2457,7 +2901,9 @@ class IssueMemoryStore:
             if row is None:
                 return None
             data = dict(row)
-            data["variant_tags_json"] = self._json_loads(data.get("variant_tags_json"), fallback=[])
+            data["variant_tags_json"] = self._json_loads(
+                data.get("variant_tags_json"), fallback=[]
+            )
             return data
 
     def get_dense_pattern_sources(
@@ -2469,7 +2915,9 @@ class IssueMemoryStore:
         limit: int,
     ) -> list[dict[str, Any]]:
         with self.managed_connection() as conn:
-            scope_predicate, scope_predicate_args, scope_order, scope_order_args = self._scope_predicate(project_scope)
+            scope_predicate, scope_predicate_args, scope_order, scope_order_args = (
+                self._scope_predicate(project_scope)
+            )
             if error_family and error_family != "generic_runtime_error":
                 family_order = "CASE WHEN p.root_cause_class = ? THEN 0 WHEN p.error_family = ? THEN 1 ELSE 2 END"
                 family_args: list[Any] = [root_cause_class, error_family]
@@ -2499,7 +2947,9 @@ class IssueMemoryStore:
         limit: int,
     ) -> list[dict[str, Any]]:
         with self.managed_connection() as conn:
-            scope_predicate, scope_predicate_args, scope_order, scope_order_args = self._scope_predicate(project_scope)
+            scope_predicate, scope_predicate_args, scope_order, scope_order_args = (
+                self._scope_predicate(project_scope)
+            )
             if error_family and error_family != "generic_runtime_error":
                 family_order = "CASE WHEN p.root_cause_class = ? THEN 0 WHEN p.error_family = ? THEN 1 ELSE 2 END"
                 family_args = [root_cause_class, error_family]
@@ -2555,13 +3005,19 @@ class IssueMemoryStore:
         results: list[dict[str, Any]] = []
         for row in rows:
             data = dict(row)
-            data["variant_tags_json"] = self._json_loads(data.get("variant_tags_json"), fallback=[])
+            data["variant_tags_json"] = self._json_loads(
+                data.get("variant_tags_json"), fallback=[]
+            )
             results.append(data)
         return results
 
     @staticmethod
     def _session_expiry_iso(ttl_seconds: int) -> str:
-        return (datetime.now(timezone.utc) + timedelta(seconds=max(int(ttl_seconds), 60))).replace(microsecond=0).isoformat()
+        return (
+            (datetime.now(timezone.utc) + timedelta(seconds=max(int(ttl_seconds), 60)))
+            .replace(microsecond=0)
+            .isoformat()
+        )
 
     def _purge_expired_session_memory_tx(self, conn: sqlite3.Connection) -> int:
         now = utc_now_iso()
@@ -2614,7 +3070,9 @@ class IssueMemoryStore:
                     ),
                 )
                 if cur.lastrowid is None:
-                    raise RuntimeError("Failed to determine session memory id after insert")
+                    raise RuntimeError(
+                        "Failed to determine session memory id after insert"
+                    )
                 row_id = int(cur.lastrowid)
             else:
                 existing_value = self._json_loads(row["memory_value_json"], fallback={})
@@ -2622,7 +3080,9 @@ class IssueMemoryStore:
                 if isinstance(existing_value, dict):
                     merged_value.update(existing_value)
                 merged_value.update(memory_value)
-                merged_salience = min(max(max(float(row["salience"]), float(salience)), 0.0), 1.0)
+                merged_salience = min(
+                    max(max(float(row["salience"]), float(salience)), 0.0), 1.0
+                )
                 conn.execute(
                     """
                     UPDATE session_memory
@@ -2642,7 +3102,9 @@ class IssueMemoryStore:
                     ),
                 )
                 row_id = int(row["id"])
-            stored = conn.execute("SELECT * FROM session_memory WHERE id = ?", (row_id,)).fetchone()
+            stored = conn.execute(
+                "SELECT * FROM session_memory WHERE id = ?", (row_id,)
+            ).fetchone()
             return self._decode_session_memory_row(stored)
 
     def clear_session_memory_key(self, *, session_id: str, memory_key: str) -> None:
@@ -2652,9 +3114,13 @@ class IssueMemoryStore:
                 (session_id, memory_key),
             )
 
-    def _decode_session_memory_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    def _decode_session_memory_row(
+        self, row: sqlite3.Row | dict[str, Any]
+    ) -> dict[str, Any]:
         data = dict(row)
-        data["memory_value_json"] = self._json_loads(data.get("memory_value_json"), fallback={})
+        data["memory_value_json"] = self._json_loads(
+            data.get("memory_value_json"), fallback={}
+        )
         return data
 
     def get_session_memory(self, session_id: str) -> list[dict[str, Any]]:
@@ -2699,18 +3165,27 @@ class IssueMemoryStore:
             if not isinstance(value, dict):
                 value = {}
             raw_variant_id = value.get("variant_id")
-            variant_id = int(raw_variant_id) if raw_variant_id not in (None, "") else None
+            variant_id = (
+                int(raw_variant_id) if raw_variant_id not in (None, "") else None
+            )
             raw_salience = min(max(float(row.get("salience", 0.0)), 0.0), 1.0)
 
             # Intra-session decay: salience decays with age (Phase 2.2)
             updated_at = str(row.get("updated_at", ""))
-            decay_half_life = float(self.settings.session_decay_half_life_minutes) if self.settings else 30.0
+            decay_half_life = (
+                float(self.settings.session_decay_half_life_minutes)
+                if self.settings
+                else 30.0
+            )
             if updated_at:
                 try:
                     row_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                     if row_dt.tzinfo is None:
                         row_dt = row_dt.replace(tzinfo=timezone.utc)
-                    aged_minutes = max((datetime.now(timezone.utc) - row_dt).total_seconds() / 60.0, 0.0)
+                    aged_minutes = max(
+                        (datetime.now(timezone.utc) - row_dt).total_seconds() / 60.0,
+                        0.0,
+                    )
                     salience = raw_salience * (0.5 ** (aged_minutes / decay_half_life))
                 except (ValueError, TypeError):
                     salience = raw_salience
@@ -2746,13 +3221,19 @@ class IssueMemoryStore:
         for candidate in candidates:
             pattern_id = int(candidate.get("pattern_id", candidate["id"]))
             raw_variant_id = candidate.get("variant_id")
-            variant_id = int(raw_variant_id) if raw_variant_id not in (None, "") else None
+            variant_id = (
+                int(raw_variant_id) if raw_variant_id not in (None, "") else None
+            )
             penalty = 0.0
             boost = 0.0
             for rejected_pattern_id, rejected_variant_id, salience in rejections:
                 if rejected_pattern_id != pattern_id:
                     continue
-                if rejected_variant_id is not None and variant_id is not None and rejected_variant_id == variant_id:
+                if (
+                    rejected_variant_id is not None
+                    and variant_id is not None
+                    and rejected_variant_id == variant_id
+                ):
                     penalty = max(penalty, salience)
                 elif rejected_variant_id is not None:
                     penalty = max(penalty, salience * 0.20)
@@ -2761,7 +3242,11 @@ class IssueMemoryStore:
             for accepted_pattern_id, accepted_variant_id, salience in acceptances:
                 if accepted_pattern_id != pattern_id:
                     continue
-                if accepted_variant_id is not None and variant_id is not None and accepted_variant_id == variant_id:
+                if (
+                    accepted_variant_id is not None
+                    and variant_id is not None
+                    and accepted_variant_id == variant_id
+                ):
                     boost = max(boost, salience * 0.32)
                 elif accepted_variant_id is not None:
                     boost = max(boost, salience * 0.08)
@@ -2864,11 +3349,20 @@ class IssueMemoryStore:
             now = utc_now_iso()
             top = ranked[0] if ranked and decision.status != "abstain" else None
             top_candidate = top.candidate if top is not None else None
-            top_variant = (top_candidate.get("best_variant") or {}) if top_candidate is not None else {}
-            selected_pattern_id = int(top_candidate.get("pattern_id", top_candidate["id"])) if top_candidate is not None else None
+            top_variant = (
+                (top_candidate.get("best_variant") or {})
+                if top_candidate is not None
+                else {}
+            )
+            selected_pattern_id = (
+                int(top_candidate.get("pattern_id", top_candidate["id"]))
+                if top_candidate is not None
+                else None
+            )
             selected_variant_id = (
                 int(top_candidate.get("variant_id"))
-                if top_candidate is not None and top_candidate.get("variant_id") not in (None, "")
+                if top_candidate is not None
+                and top_candidate.get("variant_id") not in (None, "")
                 else (int(top_variant["id"]) if top_variant else None)
             )
             cur = conn.execute(
@@ -2921,7 +3415,9 @@ class IssueMemoryStore:
                 ),
             )
             if cur.lastrowid is None:
-                raise RuntimeError("Failed to determine retrieval event id after insert")
+                raise RuntimeError(
+                    "Failed to determine retrieval event id after insert"
+                )
             event_id = int(cur.lastrowid)
             ids_by_rank: dict[int, int] = {}
             for rank, item in enumerate(ranked[:12], start=1):
@@ -2929,8 +3425,14 @@ class IssueMemoryStore:
                 variant = candidate.get("best_variant") or {}
                 pattern_id = int(candidate.get("pattern_id", candidate["id"]))
                 raw_variant_id = candidate.get("variant_id")
-                variant_id = int(raw_variant_id) if raw_variant_id not in (None, "") else (int(variant["id"]) if variant else None)
-                candidate_type = str(candidate.get("candidate_type", "variant" if variant else "pattern"))
+                variant_id = (
+                    int(raw_variant_id)
+                    if raw_variant_id not in (None, "")
+                    else (int(variant["id"]) if variant else None)
+                )
+                candidate_type = str(
+                    candidate.get("candidate_type", "variant" if variant else "pattern")
+                )
                 feature_json = self._json_dumps(item.features)
                 reason_json = self._json_dumps(item.reasons)
                 cur = conn.execute(
@@ -2968,7 +3470,9 @@ class IssueMemoryStore:
                     ),
                 )
                 if cur.lastrowid is None:
-                    raise RuntimeError("Failed to determine retrieval candidate id after insert")
+                    raise RuntimeError(
+                        "Failed to determine retrieval candidate id after insert"
+                    )
                 ids_by_rank[rank] = int(cur.lastrowid)
             return {
                 "event_id": event_id,
@@ -3023,7 +3527,11 @@ class IssueMemoryStore:
                     "SELECT selected_candidate_rank FROM retrieval_events WHERE id = ?",
                     (retrieval_event_id,),
                 ).fetchone()
-                rank = int(event["selected_candidate_rank"]) if event and event["selected_candidate_rank"] is not None else 1
+                rank = (
+                    int(event["selected_candidate_rank"])
+                    if event and event["selected_candidate_rank"] is not None
+                    else 1
+                )
                 row = conn.execute(
                     "SELECT * FROM retrieval_candidates WHERE retrieval_event_id = ? AND candidate_rank = ?",
                     (retrieval_event_id, rank),
@@ -3037,7 +3545,7 @@ class IssueMemoryStore:
 
     @staticmethod
     def _normalized_scope_key(scope_type: str, scope_key: str) -> str:
-        return '' if scope_type == 'global' else scope_key.strip()
+        return "" if scope_type == "global" else scope_key.strip()
 
     @staticmethod
     def _decay_beta_parameters(
@@ -3054,7 +3562,9 @@ class IssueMemoryStore:
         updated_dt = parse_iso_datetime(updated_at)
         if updated_dt is None:
             return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
-        age_days = max((datetime.now(timezone.utc) - updated_dt).total_seconds() / 86400.0, 0.0)
+        age_days = max(
+            (datetime.now(timezone.utc) - updated_dt).total_seconds() / 86400.0, 0.0
+        )
         if age_days <= 0.0:
             return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
         decay = 0.5 ** (age_days / float(half_life_days))
@@ -3063,14 +3573,16 @@ class IssueMemoryStore:
         return decayed_alpha, decayed_beta, decay
 
     @staticmethod
-    def _strategy_scope_entries(*, repo_name: str, user_scope: str) -> list[tuple[str, str]]:
-        entries: list[tuple[str, str]] = [('global', '')]
+    def _strategy_scope_entries(
+        *, repo_name: str, user_scope: str
+    ) -> list[tuple[str, str]]:
+        entries: list[tuple[str, str]] = [("global", "")]
         normalized_repo_name = repo_name.strip()
         normalized_user_scope = user_scope.strip()
         if normalized_repo_name:
-            entries.append(('repo', normalized_repo_name))
+            entries.append(("repo", normalized_repo_name))
         if normalized_user_scope:
-            entries.append(('user', normalized_user_scope))
+            entries.append(("user", normalized_user_scope))
         return entries
 
     def _merge_negative_applicability(
@@ -3082,6 +3594,7 @@ class IssueMemoryStore:
         now: str,
     ) -> dict[str, Any]:
         payload = dict(existing) if isinstance(existing, dict) else {}
+
         def _append_unique(key: str, value: str, *, limit: int = 8) -> None:
             normalized = value.strip()
             if not normalized:
@@ -3089,25 +3602,33 @@ class IssueMemoryStore:
             current = payload.get(key, [])
             if not isinstance(current, list):
                 current = []
-            merged = [str(item) for item in current if str(item).strip() and str(item).strip() != normalized]
+            merged = [
+                str(item)
+                for item in current
+                if str(item).strip() and str(item).strip() != normalized
+            ]
             merged.append(normalized)
             payload[key] = merged[-limit:]
 
-        payload['false_positive_count'] = int(payload.get('false_positive_count', 0)) + 1
-        payload['last_false_positive_at'] = now
+        payload["false_positive_count"] = (
+            int(payload.get("false_positive_count", 0)) + 1
+        )
+        payload["last_false_positive_at"] = now
         if event is not None:
-            _append_unique('project_scopes', str(event['project_scope']))
-            _append_unique('user_scopes', str(event['user_scope']))
-            _append_unique('repo_names', str(event['repo_name']))
-            _append_unique('commands', str(event['command']))
-            _append_unique('file_paths', str(event['file_path']))
+            _append_unique("project_scopes", str(event["project_scope"]))
+            _append_unique("user_scopes", str(event["user_scope"]))
+            _append_unique("repo_names", str(event["repo_name"]))
+            _append_unique("commands", str(event["command"]))
+            _append_unique("file_paths", str(event["file_path"]))
         if notes.strip():
-            current_notes = payload.get('notes', [])
+            current_notes = payload.get("notes", [])
             if not isinstance(current_notes, list):
                 current_notes = []
-            normalized_notes = [str(item) for item in current_notes if str(item).strip()]
+            normalized_notes = [
+                str(item) for item in current_notes if str(item).strip()
+            ]
             normalized_notes.append(notes.strip())
-            payload['notes'] = normalized_notes[-5:]
+            payload["notes"] = normalized_notes[-5:]
         return payload
 
     def _update_strategy_stat_tx(
@@ -3166,12 +3687,12 @@ class IssueMemoryStore:
                 (scope_type, normalized_key, strategy_key),
             ).fetchone()
         assert row is not None
-        alpha_before = float(row['alpha'])
-        beta_before = float(row['beta'])
+        alpha_before = float(row["alpha"])
+        beta_before = float(row["beta"])
         decayed_alpha, decayed_beta, decay = self._decay_beta_parameters(
             alpha=alpha_before,
             beta=beta_before,
-            updated_at=str(row['updated_at']),
+            updated_at=str(row["updated_at"]),
             half_life_days=self.settings.strategy_half_life_days,
             prior_alpha=STRATEGY_PRIOR_ALPHA,
             prior_beta=STRATEGY_PRIOR_BETA,
@@ -3180,29 +3701,29 @@ class IssueMemoryStore:
         failure_delta = 0 if success else 1
         alpha_after = decayed_alpha + success_delta
         beta_after = decayed_beta + failure_delta
-        success_count = int(row['success_count']) + success_delta
-        failure_count = int(row['failure_count']) + failure_delta
+        success_count = int(row["success_count"]) + success_delta
+        failure_count = int(row["failure_count"]) + failure_delta
 
         # Multi-factor posterior updates (Phase 3.1)
         row_dict = dict(row)
-        qa = float(row_dict.get('quality_alpha', STRATEGY_PRIOR_ALPHA))
-        qb = float(row_dict.get('quality_beta', STRATEGY_PRIOR_BETA))
-        sa = float(row_dict.get('safety_alpha', STRATEGY_PRIOR_ALPHA))
-        sb = float(row_dict.get('safety_beta', STRATEGY_PRIOR_BETA))
-        aa = float(row_dict.get('adoption_alpha', STRATEGY_PRIOR_ALPHA))
-        ab = float(row_dict.get('adoption_beta', STRATEGY_PRIOR_BETA))
+        qa = float(row_dict.get("quality_alpha", STRATEGY_PRIOR_ALPHA))
+        qb = float(row_dict.get("quality_beta", STRATEGY_PRIOR_BETA))
+        sa = float(row_dict.get("safety_alpha", STRATEGY_PRIOR_ALPHA))
+        sb = float(row_dict.get("safety_beta", STRATEGY_PRIOR_BETA))
+        aa = float(row_dict.get("adoption_alpha", STRATEGY_PRIOR_ALPHA))
+        ab = float(row_dict.get("adoption_beta", STRATEGY_PRIOR_BETA))
         ft = feedback_type.strip().lower()
-        if ft == 'fix_verified':
+        if ft == "fix_verified":
             qa += 1.0
-        elif ft == 'false_positive':
+        elif ft == "false_positive":
             qb += 1.0
             sb += 1.0  # safety failure
-        elif ft in ('candidate_accepted', 'merge_confirmed', 'split_confirmed'):
+        elif ft in ("candidate_accepted", "merge_confirmed", "split_confirmed"):
             aa += 1.0
-        elif ft in ('candidate_rejected', 'merge_rejected', 'split_rejected'):
+        elif ft in ("candidate_rejected", "merge_rejected", "split_rejected"):
             ab += 1.0
         # For strong positive: safety success (non-FP)
-        if success and ft != 'false_positive':
+        if success and ft != "false_positive":
             sa += 1.0
 
         conn.execute(
@@ -3214,9 +3735,22 @@ class IssueMemoryStore:
                 adoption_alpha = ?, adoption_beta = ?
             WHERE scope_type = ? AND scope_key = ? AND strategy_key = ?
             """,
-            (alpha_after, beta_after, success_count, failure_count, now,
-             qa, qb, sa, sb, aa, ab,
-             scope_type, normalized_key, strategy_key),
+            (
+                alpha_after,
+                beta_after,
+                success_count,
+                failure_count,
+                now,
+                qa,
+                qb,
+                sa,
+                sb,
+                aa,
+                ab,
+                scope_type,
+                normalized_key,
+                strategy_key,
+            ),
         )
         updated_row = conn.execute(
             """
@@ -3227,9 +3761,9 @@ class IssueMemoryStore:
         ).fetchone()
         assert updated_row is not None
         data = self._decode_strategy_stat_row(updated_row)
-        data['alpha_before'] = alpha_before
-        data['beta_before'] = beta_before
-        data['decay_factor'] = round(decay, 6)
+        data["alpha_before"] = alpha_before
+        data["beta_before"] = beta_before
+        data["decay_factor"] = round(decay, 6)
         return data
 
     def _update_variant_stat_tx(
@@ -3258,12 +3792,12 @@ class IssueMemoryStore:
                 (variant_id,),
             ).fetchone()
         assert row is not None
-        alpha_before = float(row['alpha'])
-        beta_before = float(row['beta'])
+        alpha_before = float(row["alpha"])
+        beta_before = float(row["beta"])
         decayed_alpha, decayed_beta, decay = self._decay_beta_parameters(
             alpha=alpha_before,
             beta=beta_before,
-            updated_at=str(row['updated_at']),
+            updated_at=str(row["updated_at"]),
             half_life_days=self.settings.variant_half_life_days,
             prior_alpha=VARIANT_PRIOR_ALPHA,
             prior_beta=VARIANT_PRIOR_BETA,
@@ -3272,8 +3806,8 @@ class IssueMemoryStore:
         failure_delta = 0.0 if success else weight
         alpha_after = decayed_alpha + success_delta
         beta_after = decayed_beta + failure_delta
-        success_count = int(row['success_count']) + (1 if success else 0)
-        failure_count = int(row['failure_count']) + (0 if success else 1)
+        success_count = int(row["success_count"]) + (1 if success else 0)
+        failure_count = int(row["failure_count"]) + (0 if success else 1)
         conn.execute(
             """
             UPDATE variant_stats
@@ -3288,9 +3822,9 @@ class IssueMemoryStore:
         ).fetchone()
         assert updated_row is not None
         data = self._decode_variant_stat_row(updated_row)
-        data['alpha_before'] = alpha_before
-        data['beta_before'] = beta_before
-        data['decay_factor'] = round(decay, 6)
+        data["alpha_before"] = alpha_before
+        data["beta_before"] = beta_before
+        data["decay_factor"] = round(decay, 6)
         return data
 
     def _apply_strong_feedback_tx(
@@ -3307,20 +3841,20 @@ class IssueMemoryStore:
         now = utc_now_iso()
         success = reward > 0
         result: dict[str, Any] = {
-            'global_update_applied': False,
-            'strategy_stat_updates': [],
-            'variant_stat_update': None,
-            'negative_applicability_applied': False,
+            "global_update_applied": False,
+            "strategy_stat_updates": [],
+            "variant_stat_update": None,
+            "negative_applicability_applied": False,
         }
         event = conn.execute(
-            'SELECT * FROM retrieval_events WHERE id = ?',
+            "SELECT * FROM retrieval_events WHERE id = ?",
             (retrieval_event_id,),
         ).fetchone()
         if feedback_type not in STRONG_GLOBAL_FEEDBACK:
             if feedback_type in WEAK_FEEDBACK_WEIGHTS and variant_id is not None:
                 weak_weight = WEAK_FEEDBACK_WEIGHTS[feedback_type]
                 weak_success = feedback_type in WEAK_POSITIVE_FEEDBACK
-                result['variant_stat_update'] = self._update_variant_stat_tx(
+                result["variant_stat_update"] = self._update_variant_stat_tx(
                     conn,
                     variant_id=variant_id,
                     success=weak_success,
@@ -3328,32 +3862,42 @@ class IssueMemoryStore:
                     weight=weak_weight,
                 )
             return result
-        result['global_update_applied'] = True
+        result["global_update_applied"] = True
         if pattern_id is not None:
-            row = conn.execute('SELECT * FROM issue_patterns WHERE id = ?', (pattern_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM issue_patterns WHERE id = ?", (pattern_id,)
+            ).fetchone()
             if row is not None:
-                confidence_before = float(row['confidence'])
-                confidence_after = self._clamp(confidence_before + (0.12 if success else -0.12))
+                confidence_before = float(row["confidence"])
+                confidence_after = self._clamp(
+                    confidence_before + (0.12 if success else -0.12)
+                )
                 conn.execute(
-                    'UPDATE issue_patterns SET confidence = ?, updated_at = ? WHERE id = ?',
+                    "UPDATE issue_patterns SET confidence = ?, updated_at = ? WHERE id = ?",
                     (confidence_after, now, pattern_id),
                 )
-                result['pattern'] = {
-                    'pattern_id': pattern_id,
-                    'confidence_before': round(confidence_before, 4),
-                    'confidence_after': round(confidence_after, 4),
+                result["pattern"] = {
+                    "pattern_id": pattern_id,
+                    "confidence_before": round(confidence_before, 4),
+                    "confidence_after": round(confidence_after, 4),
                 }
         variant_row = None
         if variant_id is not None:
-            variant_row = conn.execute('SELECT * FROM issue_variants WHERE id = ?', (variant_id,)).fetchone()
+            variant_row = conn.execute(
+                "SELECT * FROM issue_variants WHERE id = ?", (variant_id,)
+            ).fetchone()
             if variant_row is not None:
                 success_delta = 1 if success else 0
                 reject_delta = 0 if success else 1
-                confidence_before = float(variant_row['confidence'])
-                memory_before = float(variant_row['memory_strength'])
-                confidence_after = self._clamp(confidence_before + (0.16 if success else -0.16))
+                confidence_before = float(variant_row["confidence"])
+                memory_before = float(variant_row["memory_strength"])
+                confidence_after = self._clamp(
+                    confidence_before + (0.16 if success else -0.16)
+                )
                 memory_after = self._clamp(memory_before + (0.12 if success else -0.10))
-                negative_applicability = self._json_loads(variant_row['negative_applicability_json'], fallback={})
+                negative_applicability = self._json_loads(
+                    variant_row["negative_applicability_json"], fallback={}
+                )
                 if not success:
                     negative_applicability = self._merge_negative_applicability(
                         negative_applicability,
@@ -3361,7 +3905,7 @@ class IssueMemoryStore:
                         notes=notes,
                         now=now,
                     )
-                    result['negative_applicability_applied'] = True
+                    result["negative_applicability_applied"] = True
                 conn.execute(
                     """
                     UPDATE issue_variants
@@ -3370,35 +3914,37 @@ class IssueMemoryStore:
                     WHERE id = ?
                     """,
                     (
-                        int(variant_row['success_count']) + success_delta,
-                        int(variant_row['reject_count']) + reject_delta,
+                        int(variant_row["success_count"]) + success_delta,
+                        int(variant_row["reject_count"]) + reject_delta,
                         confidence_after,
                         memory_after,
                         self._json_dumps(negative_applicability),
                         now,
-                        now if success else variant_row['last_verified_at'],
+                        now if success else variant_row["last_verified_at"],
                         now,
                         variant_id,
                     ),
                 )
-                result['variant'] = {
-                    'variant_id': variant_id,
-                    'confidence_before': round(confidence_before, 4),
-                    'confidence_after': round(confidence_after, 4),
-                    'memory_strength_before': round(memory_before, 4),
-                    'memory_strength_after': round(memory_after, 4),
+                result["variant"] = {
+                    "variant_id": variant_id,
+                    "confidence_before": round(confidence_before, 4),
+                    "confidence_after": round(confidence_after, 4),
+                    "memory_strength_before": round(memory_before, 4),
+                    "memory_strength_after": round(memory_after, 4),
                 }
-                strategy_key = str(variant_row['strategy_key'])
-                result['variant_stat_update'] = self._update_variant_stat_tx(
+                strategy_key = str(variant_row["strategy_key"])
+                result["variant_stat_update"] = self._update_variant_stat_tx(
                     conn,
                     variant_id=variant_id,
                     success=success,
                     now=now,
                 )
                 if strategy_key:
-                    repo_name = str(event['repo_name']) if event is not None else ''
-                    user_scope = str(event['user_scope']) if event is not None else ''
-                    for scope_type, scope_key in self._strategy_scope_entries(repo_name=repo_name, user_scope=user_scope):
+                    repo_name = str(event["repo_name"]) if event is not None else ""
+                    user_scope = str(event["user_scope"]) if event is not None else ""
+                    for scope_type, scope_key in self._strategy_scope_entries(
+                        repo_name=repo_name, user_scope=user_scope
+                    ):
                         stat = self._update_strategy_stat_tx(
                             conn,
                             scope_type=scope_type,
@@ -3409,9 +3955,10 @@ class IssueMemoryStore:
                             feedback_type=feedback_type,
                         )
                         if stat is not None:
-                            result['strategy_stat_updates'].append(stat)
+                            result["strategy_stat_updates"].append(stat)
                     # Propagate to family (Phase 3.2)
                     from .learning.families import resolve_strategy_family
+
                     family_key = resolve_strategy_family(strategy_key)
                     if family_key:
                         self._update_family_stat_tx(
@@ -3434,9 +3981,13 @@ class IssueMemoryStore:
     ) -> dict[str, Any]:
         now = utc_now_iso()
         strategy_updates: list[dict[str, Any]] = []
-        variant_update = self._update_variant_stat_tx(conn, variant_id=variant_id, success=True, now=now)
+        variant_update = self._update_variant_stat_tx(
+            conn, variant_id=variant_id, success=True, now=now
+        )
         if strategy_key.strip():
-            for scope_type, scope_key in self._strategy_scope_entries(repo_name=repo_name, user_scope=user_scope):
+            for scope_type, scope_key in self._strategy_scope_entries(
+                repo_name=repo_name, user_scope=user_scope
+            ):
                 stat = self._update_strategy_stat_tx(
                     conn,
                     scope_type=scope_type,
@@ -3448,8 +3999,8 @@ class IssueMemoryStore:
                 if stat is not None:
                     strategy_updates.append(stat)
         return {
-            'variant_stat_update': variant_update,
-            'strategy_stat_updates': strategy_updates,
+            "variant_stat_update": variant_update,
+            "strategy_stat_updates": strategy_updates,
         }
 
     # ------------------------------------------------------------------
@@ -3472,11 +4023,20 @@ class IssueMemoryStore:
         """Find retrieval events without feedback older than *timeout_minutes* and record implicit_ignore feedback."""
         from .services.feedback_service import DEFAULT_REWARDS
 
-        effective_timeout = timeout_minutes if timeout_minutes is not None else int(self.settings.implicit_feedback_timeout_minutes)
-        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=effective_timeout)).replace(microsecond=0).isoformat()
+        effective_timeout = (
+            timeout_minutes
+            if timeout_minutes is not None
+            else int(self.settings.implicit_feedback_timeout_minutes)
+        )
+        cutoff = (
+            (datetime.now(timezone.utc) - timedelta(minutes=effective_timeout))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.managed_connection() as conn:
             rows = [
-                dict(r) for r in conn.execute(
+                dict(r)
+                for r in conn.execute(
                     """
                     SELECT re.id AS retrieval_event_id, rc.id AS retrieval_candidate_id,
                            rc.pattern_id, rc.variant_id
@@ -3515,12 +4075,14 @@ class IssueMemoryStore:
                     "UPDATE retrieval_events SET has_feedback = 1 WHERE id = ?",
                     (row["retrieval_event_id"],),
                 )
-                results.append({
-                    "retrieval_event_id": row["retrieval_event_id"],
-                    "pattern_id": row.get("pattern_id"),
-                    "variant_id": row.get("variant_id"),
-                    "reward": reward,
-                })
+                results.append(
+                    {
+                        "retrieval_event_id": row["retrieval_event_id"],
+                        "pattern_id": row.get("pattern_id"),
+                        "variant_id": row.get("variant_id"),
+                        "reward": reward,
+                    }
+                )
             return results
 
     # ------------------------------------------------------------------
@@ -3587,13 +4149,15 @@ class IssueMemoryStore:
                 ),
             )
             if cur.lastrowid is None:
-                raise RuntimeError('Failed to determine feedback event id after insert')
+                raise RuntimeError("Failed to determine feedback event id after insert")
             feedback_row = conn.execute(
-                'SELECT * FROM feedback_events WHERE id = ?',
+                "SELECT * FROM feedback_events WHERE id = ?",
                 (int(cur.lastrowid),),
             ).fetchone()
             if feedback_row is None:
-                raise RuntimeError('Feedback event row could not be loaded after insert')
+                raise RuntimeError(
+                    "Feedback event row could not be loaded after insert"
+                )
             strong_updates = self._apply_strong_feedback_tx(
                 conn,
                 retrieval_event_id=retrieval_event_id,
@@ -3604,13 +4168,19 @@ class IssueMemoryStore:
                 notes=notes,
             )
             return {
-                'feedback_row': dict(feedback_row),
-                'pattern_update': strong_updates.get('pattern'),
-                'variant_update': strong_updates.get('variant'),
-                'strategy_stat_updates': strong_updates.get('strategy_stat_updates', []),
-                'variant_stat_update': strong_updates.get('variant_stat_update'),
-                'global_update_applied': bool(strong_updates.get('global_update_applied', False)),
-                'negative_applicability_applied': bool(strong_updates.get('negative_applicability_applied', False)),
+                "feedback_row": dict(feedback_row),
+                "pattern_update": strong_updates.get("pattern"),
+                "variant_update": strong_updates.get("variant"),
+                "strategy_stat_updates": strong_updates.get(
+                    "strategy_stat_updates", []
+                ),
+                "variant_stat_update": strong_updates.get("variant_stat_update"),
+                "global_update_applied": bool(
+                    strong_updates.get("global_update_applied", False)
+                ),
+                "negative_applicability_applied": bool(
+                    strong_updates.get("negative_applicability_applied", False)
+                ),
             }
 
     def log_feature_outcomes(
@@ -3626,8 +4196,17 @@ class IssueMemoryStore:
     ) -> int:
         now = utc_now_iso()
         rows = [
-            (feedback_event_id, retrieval_candidate_id, name, float(value),
-             feedback_type, float(reward), error_family, project_scope, now)
+            (
+                feedback_event_id,
+                retrieval_candidate_id,
+                name,
+                float(value),
+                feedback_type,
+                float(reward),
+                error_family,
+                project_scope,
+                now,
+            )
             for name, value in features.items()
         ]
         if not rows:
@@ -3665,7 +4244,10 @@ class IssueMemoryStore:
             return [dict(r) for r in rows]
 
     def query_feature_outcome_matrix(
-        self, *, error_family: str = "", min_samples: int = 5,
+        self,
+        *,
+        error_family: str = "",
+        min_samples: int = 5,
     ) -> dict[str, Any]:
         """Return per-candidate feature vectors and reward labels for weight calibration.
 
@@ -3698,14 +4280,25 @@ class IssueMemoryStore:
             d = dict(r)
             cid = int(d["retrieval_candidate_id"])
             if cid not in candidates:
-                candidates[cid] = {"features": {}, "reward": float(d["reward"]), "error_family": str(d["error_family"])}
-            candidates[cid]["features"][str(d["feature_name"])] = float(d["feature_value"])
+                candidates[cid] = {
+                    "features": {},
+                    "reward": float(d["reward"]),
+                    "error_family": str(d["error_family"]),
+                }
+            candidates[cid]["features"][str(d["feature_name"])] = float(
+                d["feature_value"]
+            )
             feature_names_set.add(str(d["feature_name"]))
 
         samples = list(candidates.values())
         feature_names = sorted(feature_names_set)
         if len(samples) < min_samples:
-            return {"samples": [], "feature_names": feature_names, "skipped": True, "reason": f"only {len(samples)} samples (need {min_samples})"}
+            return {
+                "samples": [],
+                "feature_names": feature_names,
+                "skipped": True,
+                "reason": f"only {len(samples)} samples (need {min_samples})",
+            }
         return {"samples": samples, "feature_names": feature_names}
 
     # ------------------------------------------------------------------
@@ -3729,7 +4322,9 @@ class IssueMemoryStore:
             variant_rows = conn.execute(
                 "SELECT search_text AS txt FROM issue_variants WHERE search_text != ''"
             ).fetchall()
-            all_docs = [str(r["txt"]) for r in pattern_rows] + [str(r["txt"]) for r in variant_rows]
+            all_docs = [str(r["txt"]) for r in pattern_rows] + [
+                str(r["txt"]) for r in variant_rows
+            ]
             total_docs = max(len(all_docs), 1)
 
             token_doc_count: dict[str, int] = {}
@@ -3769,7 +4364,9 @@ class IssueMemoryStore:
     # ------------------------------------------------------------------
 
     def query_entity_importance(
-        self, error_family: str, entity_keys: list[str],
+        self,
+        error_family: str,
+        entity_keys: list[str],
     ) -> dict[str, float]:
         """Return {entity_key: importance_weight} for requested keys within an error family."""
         if not entity_keys:
@@ -3819,7 +4416,11 @@ class IssueMemoryStore:
                 col_inc = "match_count"
             else:
                 col_inc = "conflict_count"
-            outcome_col = "positive_outcome_count" if is_positive_outcome else "negative_outcome_count"
+            outcome_col = (
+                "positive_outcome_count"
+                if is_positive_outcome
+                else "negative_outcome_count"
+            )
 
             conn.execute(
                 f"""
@@ -3843,7 +4444,9 @@ class IssueMemoryStore:
                 (entity_key, error_family),
             ).fetchone()
             if row:
-                total = int(row["positive_outcome_count"]) + int(row["negative_outcome_count"])
+                total = int(row["positive_outcome_count"]) + int(
+                    row["negative_outcome_count"]
+                )
                 if total >= 3:
                     positive_rate = int(row["positive_outcome_count"]) / total
                     weight = 0.5 + 0.5 * (2.0 * positive_rate - 1.0)
@@ -3891,7 +4494,11 @@ class IssueMemoryStore:
             return {"queued_id": cur.lastrowid, "status": "batched"}
 
     def count_recent_fp_for_pattern(self, pattern_id: int, window_seconds: int) -> int:
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max(window_seconds, 1))).replace(microsecond=0).isoformat()
+        cutoff = (
+            (datetime.now(timezone.utc) - timedelta(seconds=max(window_seconds, 1)))
+            .replace(microsecond=0)
+            .isoformat()
+        )
         with self.managed_connection() as conn:
             row = conn.execute(
                 """
@@ -3915,7 +4522,9 @@ class IssueMemoryStore:
                     "UPDATE feedback_batch_queue SET status = 'applied', applied_at = ? WHERE id = ?",
                     (now, int(row["id"])),
                 )
-                results.append({"id": int(row["id"]), "feedback_type": str(row["feedback_type"])})
+                results.append(
+                    {"id": int(row["id"]), "feedback_type": str(row["feedback_type"])}
+                )
             return results
 
     @staticmethod

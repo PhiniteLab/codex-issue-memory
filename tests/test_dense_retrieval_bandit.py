@@ -6,7 +6,10 @@ from pathlib import Path
 import unittest
 
 from codex_issue_memory.app import IssueMemoryApp
-from codex_issue_memory.benchmarks import run_dense_bandit_benchmark, seed_dense_bandit_memory
+from codex_issue_memory.benchmarks import (
+    run_dense_bandit_benchmark,
+    seed_dense_bandit_memory,
+)
 
 
 class DenseRetrievalBanditTests(unittest.TestCase):
@@ -25,7 +28,9 @@ class DenseRetrievalBanditTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-dense-bandit-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -55,7 +60,9 @@ class DenseRetrievalBanditTests(unittest.TestCase):
             limit=3,
         )
         self.assertTrue(result["matches"])
-        self.assertEqual(result["matches"][0]["title"], "LoRA adapter checkpoint rank mismatch")
+        self.assertEqual(
+            result["matches"][0]["title"], "LoRA adapter checkpoint rank mismatch"
+        )
         self.assertIn("dense-retrieval", result["matches"][0]["why"])
 
         with self.app.store.managed_connection() as conn:
@@ -83,7 +90,9 @@ class DenseRetrievalBanditTests(unittest.TestCase):
         )
         self.assertIsNotNone(feedback["bandit"])
         assert feedback["bandit"] is not None
-        self.assertEqual(feedback["bandit"]["policy"], "conservative_hierarchical_thompson")
+        self.assertEqual(
+            feedback["bandit"]["policy"], "conservative_hierarchical_thompson"
+        )
         self.assertTrue(feedback["bandit"]["global_update_applied"])
 
         second = self.app.issue_match(
@@ -94,7 +103,9 @@ class DenseRetrievalBanditTests(unittest.TestCase):
             limit=3,
         )
         self.assertTrue(second["matches"])
-        self.assertEqual(int(second["matches"][0]["pattern_id"]), second_candidate_pattern)
+        self.assertEqual(
+            int(second["matches"][0]["pattern_id"]), second_candidate_pattern
+        )
         promoted_why = second["matches"][0]["why"]
         self.assertTrue(
             any(reason.startswith("strategy-bandit-") for reason in promoted_why)

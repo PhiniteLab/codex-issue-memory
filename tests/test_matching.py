@@ -13,7 +13,9 @@ class MatchingTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-test-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -47,7 +49,9 @@ class MatchingTests(unittest.TestCase):
             project_scope="global",
         )
         self.assertTrue(result["matches"])
-        self.assertEqual(result["matches"][0]["root_cause_class"], "cwd_relative_path_bug")
+        self.assertEqual(
+            result["matches"][0]["root_cause_class"], "cwd_relative_path_bug"
+        )
 
     def test_tensor_device_issue_matches(self) -> None:
         self.app.issue_record_resolution(

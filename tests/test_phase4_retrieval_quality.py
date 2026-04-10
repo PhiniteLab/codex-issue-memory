@@ -1,4 +1,5 @@
 """Phase 4 — Retrieval Quality: IDF token prioritization, synonym expansion, entity slot learning."""
+
 from __future__ import annotations
 
 import os
@@ -136,8 +137,9 @@ class TestSynonymExpansion(unittest.TestCase):
     def test_synonym_map_is_bidirectional(self) -> None:
         for a, syns in SYNONYM_MAP.items():
             for b in syns:
-                self.assertIn(a, SYNONYM_MAP.get(b, set()),
-                              f"({a}, {b}) not bidirectional")
+                self.assertIn(
+                    a, SYNONYM_MAP.get(b, set()), f"({a}, {b}) not bidirectional"
+                )
 
     def test_synonym_map_has_minimum_pairs(self) -> None:
         self.assertGreaterEqual(len(SYNONYM_MAP), 50)
@@ -173,8 +175,10 @@ class TestSynonymExpansion(unittest.TestCase):
         self.assertIn("cuda", tokens)
         # At least one synonym should be added
         synonym_tokens = SYNONYM_MAP.get("cuda", set())
-        self.assertTrue(any(s in tokens for s in synonym_tokens),
-                        f"no synonym of cuda found in {tokens}")
+        self.assertTrue(
+            any(s in tokens for s in synonym_tokens),
+            f"no synonym of cuda found in {tokens}",
+        )
 
     def test_tokenize_no_synonyms_when_disabled(self) -> None:
         tokens = tokenize("cuda mismatch", expand_syns=False)
@@ -231,7 +235,9 @@ class TestEntitySlotLearning(unittest.TestCase):
             is_match=True,
             is_positive_outcome=True,
         )
-        weights = self.app.store.query_entity_importance("import_error", ["module_name"])
+        weights = self.app.store.query_entity_importance(
+            "import_error", ["module_name"]
+        )
         self.assertIn("module_name", weights)
         self.assertGreater(weights["module_name"], 0.0)
 
@@ -272,12 +278,16 @@ class TestEntitySlotLearning(unittest.TestCase):
         store = self.app.store
         # Insert specific family and global
         store.update_entity_importance(
-            entity_key="module_name", error_family="import_error",
-            is_match=True, is_positive_outcome=True,
+            entity_key="module_name",
+            error_family="import_error",
+            is_match=True,
+            is_positive_outcome=True,
         )
         store.update_entity_importance(
-            entity_key="module_name", error_family="",
-            is_match=True, is_positive_outcome=False,
+            entity_key="module_name",
+            error_family="",
+            is_match=True,
+            is_positive_outcome=False,
         )
         # Query should prefer import_error-specific entry
         weights = store.query_entity_importance("import_error", ["module_name"])
@@ -326,11 +336,15 @@ class TestEntitySlotLearning(unittest.TestCase):
         }
         # Without entity importance
         features_base, _ = build_candidate_features(
-            profile, candidate, project_scope="global",
+            profile,
+            candidate,
+            project_scope="global",
         )
         # With boosted entity importance
         features_boosted, _ = build_candidate_features(
-            profile, candidate, project_scope="global",
+            profile,
+            candidate,
+            project_scope="global",
             entity_importance={"module_name": 1.8},
         )
         self.assertGreater(
@@ -379,12 +393,19 @@ class TestEntitySlotLearning(unittest.TestCase):
             "session_penalty": 0.0,
         }
         features_a, _ = build_candidate_features(
-            profile, candidate, project_scope="global", entity_importance=None,
+            profile,
+            candidate,
+            project_scope="global",
+            entity_importance=None,
         )
         features_b, _ = build_candidate_features(
-            profile, candidate, project_scope="global",
+            profile,
+            candidate,
+            project_scope="global",
         )
-        self.assertAlmostEqual(features_a["entity_match_score"], features_b["entity_match_score"])
+        self.assertAlmostEqual(
+            features_a["entity_match_score"], features_b["entity_match_score"]
+        )
 
 
 if __name__ == "__main__":

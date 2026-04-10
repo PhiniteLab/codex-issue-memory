@@ -6,7 +6,11 @@ from pathlib import Path
 import unittest
 
 from codex_issue_memory.app import IssueMemoryApp
-from codex_issue_memory.benchmarks import run_hard_negative_benchmark, run_merge_correctness_stress, seed_hard_negative_memory
+from codex_issue_memory.benchmarks import (
+    run_hard_negative_benchmark,
+    run_merge_correctness_stress,
+    seed_hard_negative_memory,
+)
 
 
 class Phase6BenchmarksTests(unittest.TestCase):
@@ -20,10 +24,14 @@ class Phase6BenchmarksTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self._env_backup = {key: os.environ.get(key) for key in self._ENV_KEYS}
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-phase6-benchmarks-")
+        self.temp_dir = tempfile.TemporaryDirectory(
+            prefix="issue-memory-phase6-benchmarks-"
+        )
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")

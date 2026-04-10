@@ -3,6 +3,7 @@
 Uses feature_outcome_log data to compute per-family weight adjustments
 with ±0.05 step clamping for stability.
 """
+
 from __future__ import annotations
 
 import math
@@ -32,12 +33,16 @@ def _log_loss(predictions: list[float], labels: list[int]) -> float:
     return -total / n
 
 
-def _predict(samples: list[dict[str, Any]], weights: dict[str, float], feature_names: list[str]) -> list[float]:
+def _predict(
+    samples: list[dict[str, Any]], weights: dict[str, float], feature_names: list[str]
+) -> list[float]:
     """Compute sigmoid(weighted sum) for each sample."""
     preds = []
     for sample in samples:
         features = sample["features"]
-        score = sum(weights.get(fn, 0.0) * float(features.get(fn, 0.0)) for fn in feature_names)
+        score = sum(
+            weights.get(fn, 0.0) * float(features.get(fn, 0.0)) for fn in feature_names
+        )
         preds.append(_sigmoid(score))
     return preds
 
@@ -94,6 +99,7 @@ def compute_optimal_weights(
     weights = dict(base_weights)
     loss_before = _log_loss(_predict(samples, weights, feature_names), labels)
 
+    iteration = 0
     for iteration in range(max_iterations):
         improved = False
         for fn in calibratable:
@@ -104,7 +110,9 @@ def compute_optimal_weights(
             for delta in (-_MAX_STEP, _MAX_STEP):
                 candidate_w = current + delta
                 weights[fn] = candidate_w
-                candidate_loss = _log_loss(_predict(samples, weights, feature_names), labels)
+                candidate_loss = _log_loss(
+                    _predict(samples, weights, feature_names), labels
+                )
                 if candidate_loss < best_loss - 1e-8:
                     best_loss = candidate_loss
                     best_w = candidate_w
@@ -116,7 +124,11 @@ def compute_optimal_weights(
             break
 
     loss_after = _log_loss(_predict(samples, weights, feature_names), labels)
-    deltas = {fn: round(weights[fn] - base_weights.get(fn, 0.0), 6) for fn in calibratable if abs(weights[fn] - base_weights.get(fn, 0.0)) > 1e-8}
+    deltas = {
+        fn: round(weights[fn] - base_weights.get(fn, 0.0), 6)
+        for fn in calibratable
+        if abs(weights[fn] - base_weights.get(fn, 0.0)) > 1e-8
+    }
 
     return {
         "weight_overrides": {fn: round(weights[fn], 6) for fn in calibratable},

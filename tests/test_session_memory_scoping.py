@@ -10,10 +10,14 @@ from codex_issue_memory.app import IssueMemoryApp
 
 class SessionMemoryScopingTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-session-scope-")
+        self.temp_dir = tempfile.TemporaryDirectory(
+            prefix="issue-memory-session-scope-"
+        )
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -82,8 +86,12 @@ class SessionMemoryScopingTests(unittest.TestCase):
 
         snapshot = self.app.session_service.snapshot("variant-memory")
         keys = {row["memory_key"] for row in snapshot}
-        self.assertIn(f"rejected_variant:{first['pattern_id']}:{first['variant_id']}", keys)
-        self.assertIn(f"rejected_variant:{second['pattern_id']}:{second['variant_id']}", keys)
+        self.assertIn(
+            f"rejected_variant:{first['pattern_id']}:{first['variant_id']}", keys
+        )
+        self.assertIn(
+            f"rejected_variant:{second['pattern_id']}:{second['variant_id']}", keys
+        )
         self.assertEqual(len(snapshot), 2)
 
     def test_repo_specific_rejection_does_not_leak_across_repos(self) -> None:

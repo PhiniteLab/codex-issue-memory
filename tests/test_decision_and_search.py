@@ -13,7 +13,9 @@ class DecisionAndSearchTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-decision-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -102,8 +104,12 @@ class DecisionAndSearchTests(unittest.TestCase):
             domain="python",
         )
 
-        result_a = self.app.issue_search(query="sqlite path cwd", project_scope="global", limit=3)
-        result_b = self.app.issue_search(query="sqlite path cwd", project_scope="global", limit=3)
+        result_a = self.app.issue_search(
+            query="sqlite path cwd", project_scope="global", limit=3
+        )
+        result_b = self.app.issue_search(
+            query="sqlite path cwd", project_scope="global", limit=3
+        )
 
         ids_a = [row["pattern_id"] for row in result_a["patterns"]]
         ids_b = [row["pattern_id"] for row in result_b["patterns"]]

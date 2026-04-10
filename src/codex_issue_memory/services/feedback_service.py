@@ -23,8 +23,18 @@ DEFAULT_REWARDS: dict[str, float] = {
     "implicit_ignore": -0.10,
 }
 
-POSITIVE_FEEDBACK = {"candidate_accepted", "fix_verified", "merge_confirmed", "split_confirmed"}
-NEGATIVE_FEEDBACK = {"candidate_rejected", "false_positive", "merge_rejected", "split_rejected"}
+POSITIVE_FEEDBACK = {
+    "candidate_accepted",
+    "fix_verified",
+    "merge_confirmed",
+    "split_confirmed",
+}
+NEGATIVE_FEEDBACK = {
+    "candidate_rejected",
+    "false_positive",
+    "merge_rejected",
+    "split_rejected",
+}
 GLOBAL_LEARNING_FEEDBACK = {"fix_verified", "false_positive"}
 LEARNABLE_FEEDBACK = GLOBAL_LEARNING_FEEDBACK | set(WEAK_FEEDBACK_WEIGHTS)
 
@@ -72,23 +82,34 @@ class FeedbackService:
                 "Pass retrieval_candidate_id, candidate_rank, pattern_id or variant_id."
             )
 
-        applied_reward = DEFAULT_REWARDS.get(feedback_type, 0.0) if reward is None else float(reward)
+        applied_reward = (
+            DEFAULT_REWARDS.get(feedback_type, 0.0) if reward is None else float(reward)
+        )
 
         # Phase 5.4: Batch learning safety gate — excessive FP on same pattern
-        resolved_pattern_id = int(candidate["pattern_id"]) if candidate.get("pattern_id") is not None else None
+        resolved_pattern_id = (
+            int(candidate["pattern_id"])
+            if candidate.get("pattern_id") is not None
+            else None
+        )
         batch_window = self.store.settings.feedback_batch_window_seconds
         fp_threshold = self.store.settings.feedback_batch_fp_review_threshold
         if (
             feedback_type == "false_positive"
             and resolved_pattern_id is not None
             and batch_window > 0
-            and self.store.count_recent_fp_for_pattern(resolved_pattern_id, batch_window) >= fp_threshold
+            and self.store.count_recent_fp_for_pattern(
+                resolved_pattern_id, batch_window
+            )
+            >= fp_threshold
         ):
             batch_result = self.store.enqueue_feedback_batch(
                 retrieval_event_id=retrieval_event_id,
                 retrieval_candidate_id=int(candidate["id"]),
                 pattern_id=resolved_pattern_id,
-                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                variant_id=int(candidate["variant_id"])
+                if candidate.get("variant_id") is not None
+                else None,
                 feedback_type=feedback_type,
                 reward=applied_reward,
                 actor=actor,
@@ -104,7 +125,9 @@ class FeedbackService:
                 "resolved_candidate": {
                     "candidate_rank": int(candidate["candidate_rank"]),
                     "pattern_id": resolved_pattern_id,
-                    "variant_id": int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                    "variant_id": int(candidate["variant_id"])
+                    if candidate.get("variant_id") is not None
+                    else None,
                 },
             }
 
@@ -114,7 +137,9 @@ class FeedbackService:
             retrieval_event_id=retrieval_event_id,
             retrieval_candidate_id=int(candidate["id"]),
             pattern_id=resolved_pattern_id,
-            variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+            variant_id=int(candidate["variant_id"])
+            if candidate.get("variant_id") is not None
+            else None,
             episode_id=None,
             feedback_type=feedback_type,
             reward=applied_reward,
@@ -130,7 +155,9 @@ class FeedbackService:
                 project_scope=str(event.get("project_scope", "global")),
                 repo_name=str(event.get("repo_name", "")),
                 pattern_id=int(candidate["pattern_id"]),
-                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                variant_id=int(candidate["variant_id"])
+                if candidate.get("variant_id") is not None
+                else None,
                 feedback_type=feedback_type,
                 notes=notes,
             )
@@ -140,7 +167,9 @@ class FeedbackService:
                 project_scope=str(event.get("project_scope", "global")),
                 repo_name=str(event.get("repo_name", "")),
                 pattern_id=int(candidate["pattern_id"]),
-                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                variant_id=int(candidate["variant_id"])
+                if candidate.get("variant_id") is not None
+                else None,
                 feedback_type=feedback_type,
                 notes=notes,
             )
@@ -158,15 +187,24 @@ class FeedbackService:
             auto_rule = self._try_auto_rejection_rule(
                 event=event,
                 pattern_id=int(candidate["pattern_id"]),
-                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else 0,
+                variant_id=int(candidate["variant_id"])
+                if candidate.get("variant_id") is not None
+                else 0,
             )
 
         bandit_update = None
-        if self.store.settings.enable_strategy_bandit and feedback_type in LEARNABLE_FEEDBACK:
+        if (
+            self.store.settings.enable_strategy_bandit
+            and feedback_type in LEARNABLE_FEEDBACK
+        ):
             bandit_update = {
                 "policy": "conservative_hierarchical_thompson",
-                "global_update_applied": bool(feedback_result.get("global_update_applied", False)),
-                "strategy_stat_updates": feedback_result.get("strategy_stat_updates", []),
+                "global_update_applied": bool(
+                    feedback_result.get("global_update_applied", False)
+                ),
+                "strategy_stat_updates": feedback_result.get(
+                    "strategy_stat_updates", []
+                ),
                 "variant_stat_update": feedback_result.get("variant_stat_update"),
             }
 
@@ -199,15 +237,23 @@ class FeedbackService:
             "reward": applied_reward,
             "resolved_candidate": {
                 "candidate_rank": int(candidate["candidate_rank"]),
-                "pattern_id": int(candidate["pattern_id"]) if candidate.get("pattern_id") is not None else None,
-                "variant_id": int(candidate["variant_id"]) if candidate.get("variant_id") is not None else None,
+                "pattern_id": int(candidate["pattern_id"])
+                if candidate.get("pattern_id") is not None
+                else None,
+                "variant_id": int(candidate["variant_id"])
+                if candidate.get("variant_id") is not None
+                else None,
             },
             "pattern_update": feedback_result.get("pattern_update"),
             "variant_update": feedback_result.get("variant_update"),
             "strategy_stat_updates": feedback_result.get("strategy_stat_updates", []),
             "variant_stat_update": feedback_result.get("variant_stat_update"),
-            "global_update_applied": bool(feedback_result.get("global_update_applied", False)),
-            "negative_applicability_applied": bool(feedback_result.get("negative_applicability_applied", False)),
+            "global_update_applied": bool(
+                feedback_result.get("global_update_applied", False)
+            ),
+            "negative_applicability_applied": bool(
+                feedback_result.get("negative_applicability_applied", False)
+            ),
             "session_memory": session_memory,
             "learning": learning,
             "bandit": bandit_update,
@@ -222,7 +268,9 @@ class FeedbackService:
         variant_id: int,
     ) -> dict[str, Any] | None:
         """Increment rejection stats; auto-create an 'avoid' preference rule after threshold."""
-        user_scope = str(event.get("user_scope", "") or self.store.settings.default_user_scope or "")
+        user_scope = str(
+            event.get("user_scope", "") or self.store.settings.default_user_scope or ""
+        )
         count = self.store.increment_rejection_stat(
             user_scope=user_scope,
             pattern_id=pattern_id,
@@ -235,8 +283,14 @@ class FeedbackService:
             return None  # only fire once at exact threshold
         try:
             pattern_bundle = self.store.get_pattern(pattern_id)
-            title = str(pattern_bundle.pattern["title"]) if pattern_bundle else f"pattern-{pattern_id}"
-            instruction = f"Auto-avoid: pattern '{title}' rejected {count} times across sessions"
+            title = (
+                str(pattern_bundle.pattern["title"])
+                if pattern_bundle
+                else f"pattern-{pattern_id}"
+            )
+            instruction = (
+                f"Auto-avoid: pattern '{title}' rejected {count} times across sessions"
+            )
             result = self.preference_service.set_rule(
                 instruction=instruction,
                 project_scope=str(event.get("project_scope", "global")),
@@ -247,10 +301,18 @@ class FeedbackService:
                 weight=0.18,
                 source="cross_session_learning",
             )
-            logger.info("Auto-rejection rule created for pattern %d (count=%d)", pattern_id, count)
+            logger.info(
+                "Auto-rejection rule created for pattern %d (count=%d)",
+                pattern_id,
+                count,
+            )
             return result
         except Exception:
-            logger.warning("Failed to create auto-rejection rule for pattern %d", pattern_id, exc_info=True)
+            logger.warning(
+                "Failed to create auto-rejection rule for pattern %d",
+                pattern_id,
+                exc_info=True,
+            )
             return None
 
     def _update_entity_importance_from_feedback(

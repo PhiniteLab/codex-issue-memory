@@ -50,7 +50,9 @@ def _pid_alive(pid: int) -> bool:
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=str(path.parent), encoding="utf-8") as handle:
+    with tempfile.NamedTemporaryFile(
+        "w", delete=False, dir=str(path.parent), encoding="utf-8"
+    ) as handle:
         json.dump(payload, handle, indent=2, ensure_ascii=False, sort_keys=True)
         handle.flush()
         os.fsync(handle.fileno())
@@ -134,7 +136,11 @@ class MCPServerLifecycle:
 
     def __init__(self, settings: Settings, *, register_atexit: bool = True) -> None:
         self.settings = settings
-        self.max_instances = None if settings.max_mcp_instances is None else max(int(settings.max_mcp_instances), 1)
+        self.max_instances = (
+            None
+            if settings.max_mcp_instances is None
+            else max(int(settings.max_mcp_instances), 1)
+        )
         self.slots_dir = settings.state_dir / "mcp_slots"
         self.status_path = settings.state_dir / "issue_memory_mcp_status.json"
         self._lock_handle: Any | None = None
@@ -186,7 +192,9 @@ class MCPServerLifecycle:
         return self.settings.server_lock_dir / f"issue_memory_mcp_owner_{digest}.lock"
 
     def _parent_lock_path(self) -> Path:
-        digest = hashlib.sha256(f"issue-memory:parent:{self._parent_pid}".encode("utf-8")).hexdigest()[:24]
+        digest = hashlib.sha256(
+            f"issue-memory:parent:{self._parent_pid}".encode("utf-8")
+        ).hexdigest()[:24]
         return self.settings.server_lock_dir / f"issue_memory_mcp_parent_{digest}.lock"
 
     def _open_lock_handle(self, path: Path) -> Any:
@@ -296,7 +304,9 @@ class MCPServerLifecycle:
         self._last_activity_at = _utc_now()
 
     def _monitor_interval(self) -> float:
-        return max(float(self.settings.server_parent_instance_monitor_interval_seconds), 0.2)
+        return max(
+            float(self.settings.server_parent_instance_monitor_interval_seconds), 0.2
+        )
 
     def _stdin_fd(self) -> int | None:
         try:
@@ -312,7 +322,11 @@ class MCPServerLifecycle:
         try:
             poller = select.poll()
             readable_mask = getattr(select, "POLLIN", 0)
-            eof_mask = getattr(select, "POLLHUP", 0) | getattr(select, "POLLERR", 0) | getattr(select, "POLLNVAL", 0)
+            eof_mask = (
+                getattr(select, "POLLHUP", 0)
+                | getattr(select, "POLLERR", 0)
+                | getattr(select, "POLLNVAL", 0)
+            )
             poller.register(fd, readable_mask | eof_mask)
             events = poller.poll(0)
         except Exception:
@@ -403,7 +417,11 @@ class MCPServerLifecycle:
     def _start_monitor(self) -> None:
         if self._monitor_thread is not None and self._monitor_thread.is_alive():
             return
-        if self._stdin_fd() is None and not self.settings.server_enforce_parent_singleton and self.settings.server_parent_instance_idle_timeout_seconds <= 0:
+        if (
+            self._stdin_fd() is None
+            and not self.settings.server_enforce_parent_singleton
+            and self.settings.server_parent_instance_idle_timeout_seconds <= 0
+        ):
             return
 
         def _monitor() -> None:
@@ -412,7 +430,10 @@ class MCPServerLifecycle:
                 if self._shutdown_reason:
                     return
                 self._reap_stale_slots()
-                if self.settings.server_enforce_parent_singleton and not self._check_parent_alive():
+                if (
+                    self.settings.server_enforce_parent_singleton
+                    and not self._check_parent_alive()
+                ):
                     self._request_shutdown("parent-death")
                     return
                 eof_reason = self._observe_stdio()
@@ -421,11 +442,16 @@ class MCPServerLifecycle:
                     return
                 if self.settings.server_parent_instance_idle_timeout_seconds > 0:
                     elapsed = time.monotonic() - self._last_activity
-                    if elapsed >= self.settings.server_parent_instance_idle_timeout_seconds:
+                    if (
+                        elapsed
+                        >= self.settings.server_parent_instance_idle_timeout_seconds
+                    ):
                         self._request_shutdown("idle-timeout")
                         return
 
-        self._monitor_thread = threading.Thread(target=_monitor, name="issue-memory-mcp-lifecycle", daemon=True)
+        self._monitor_thread = threading.Thread(
+            target=_monitor, name="issue-memory-mcp-lifecycle", daemon=True
+        )
         self._monitor_thread.start()
 
     def _read_slot_payload(self, slot: int) -> dict[str, Any]:
@@ -483,8 +509,10 @@ class MCPServerLifecycle:
                     "owner_key": str(payload.get("owner_key") or "") or None,
                     "owner_key_env": str(payload.get("owner_key_env") or "") or None,
                     "owner_role": str(payload.get("owner_role") or "") or None,
-                    "shutdown_reason": str(payload.get("shutdown_reason") or "") or None,
-                    "last_activity_at": str(payload.get("last_activity_at") or "") or None,
+                    "shutdown_reason": str(payload.get("shutdown_reason") or "")
+                    or None,
+                    "last_activity_at": str(payload.get("last_activity_at") or "")
+                    or None,
                 }
             )
         active.sort(key=lambda item: int(item["slot"]))
@@ -495,7 +523,9 @@ class MCPServerLifecycle:
             return
         previous = self._read_slot_payload(self._slot)
         launch_count = int(previous.get("launch_count", 0) or 0)
-        if running and (previous.get("pid") != os.getpid() or not previous.get("running", False)):
+        if running and (
+            previous.get("pid") != os.getpid() or not previous.get("running", False)
+        ):
             launch_count += 1
         elif not running and self._started:
             launch_count = max(launch_count, 1)
@@ -505,7 +535,9 @@ class MCPServerLifecycle:
             "parent_pid": self._parent_pid,
             "running": running,
             "started_at": self._start_time,
-            "initialized_at": _utc_now() if self._initialized else previous.get("initialized_at"),
+            "initialized_at": _utc_now()
+            if self._initialized
+            else previous.get("initialized_at"),
             "lock_acquired": self._acquired,
             "max_instances": self.max_instances,
             "launch_count": launch_count,
@@ -519,7 +551,8 @@ class MCPServerLifecycle:
             "owner_role": self.settings.server_owner_role or None,
             "parent_singleton_enforced": self.settings.server_enforce_parent_singleton,
             "shutdown_reason": self._shutdown_reason,
-            "last_activity_at": self._last_activity_at or previous.get("last_activity_at"),
+            "last_activity_at": self._last_activity_at
+            or previous.get("last_activity_at"),
             "note": note,
             "updated_at": _utc_now(),
         }
@@ -548,10 +581,16 @@ class MCPServerLifecycle:
             "active_slots": active_slots,
             "pid": int((primary or fallback).get("pid", 0) or 0) or None,
             "parent_pid": int((primary or fallback).get("parent_pid", 0) or 0) or None,
-            "started_at": (primary or fallback).get("started_at") if (primary or fallback) else None,
-            "initialized_at": (primary or fallback).get("initialized_at") if (primary or fallback) else None,
+            "started_at": (primary or fallback).get("started_at")
+            if (primary or fallback)
+            else None,
+            "initialized_at": (primary or fallback).get("initialized_at")
+            if (primary or fallback)
+            else None,
             "lock_acquired": bool(active_slots),
-            "enforce_single_instance": self.max_instances == 1 if self.max_instances is not None else False,
+            "enforce_single_instance": self.max_instances == 1
+            if self.max_instances is not None
+            else False,
             "max_instances": self.max_instances,
             "launch_count": launch_count,
             "status_path": str(self.status_path),
@@ -560,12 +599,20 @@ class MCPServerLifecycle:
             "state_dir": str(self.settings.state_dir),
             "command": str((primary or fallback).get("command", "") or ""),
             "owner_key": str((primary or fallback).get("owner_key", "") or "") or None,
-            "owner_key_env": str((primary or fallback).get("owner_key_env", "") or "") or None,
-            "owner_role": str((primary or fallback).get("owner_role", "") or "") or None,
-            "shutdown_reason": str((primary or fallback).get("shutdown_reason", "") or "") or None,
+            "owner_key_env": str((primary or fallback).get("owner_key_env", "") or "")
+            or None,
+            "owner_role": str((primary or fallback).get("owner_role", "") or "")
+            or None,
+            "shutdown_reason": str(
+                (primary or fallback).get("shutdown_reason", "") or ""
+            )
+            or None,
             "parent_singleton_enforced": self.settings.server_enforce_parent_singleton,
             "idle_timeout_seconds": self.settings.server_parent_instance_idle_timeout_seconds,
-            "last_activity_at": str((primary or fallback).get("last_activity_at", "") or "") or None,
+            "last_activity_at": str(
+                (primary or fallback).get("last_activity_at", "") or ""
+            )
+            or None,
             "note": note,
             "updated_at": _utc_now(),
         }
@@ -576,14 +623,26 @@ class MCPServerLifecycle:
             return
         self._note_activity()
         self._reap_stale_slots()
-        if self.settings.server_require_owner_key and not self.settings.server_owner_key:
+        if (
+            self.settings.server_require_owner_key
+            and not self.settings.server_owner_key
+        ):
             raise RuntimeError(
                 "issue-memory MCP owner key is required but missing."
                 f" owner_key_env={self.settings.server_owner_key_env!r}"
             )
-        if self.settings.server_enforce_parent_singleton and not self._try_acquire_parent_lock():
-            active = [item for item in self._collect_active_slots() if int(item.get("parent_pid") or 0) == self._parent_pid]
-            active_pids = [int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0]
+        if (
+            self.settings.server_enforce_parent_singleton
+            and not self._try_acquire_parent_lock()
+        ):
+            active = [
+                item
+                for item in self._collect_active_slots()
+                if int(item.get("parent_pid") or 0) == self._parent_pid
+            ]
+            active_pids = [
+                int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0
+            ]
             suffix = f" active_pids={active_pids}" if active_pids else ""
             raise MCPServerOwnerConflict(
                 "issue-memory MCP parent process already has active instance."
@@ -593,11 +652,19 @@ class MCPServerLifecycle:
             )
         if not self._try_acquire_owner_key():
             active = [
-                item for item in self._collect_active_slots() if str(item.get("owner_key") or "") == self.settings.server_owner_key
+                item
+                for item in self._collect_active_slots()
+                if str(item.get("owner_key") or "") == self.settings.server_owner_key
             ]
-            active_pids = [int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0]
+            active_pids = [
+                int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0
+            ]
             suffix = f" active_pids={active_pids}" if active_pids else ""
-            role_suffix = f" owner_role={self.settings.server_owner_role!r}." if self.settings.server_owner_role else "."
+            role_suffix = (
+                f" owner_role={self.settings.server_owner_role!r}."
+                if self.settings.server_owner_role
+                else "."
+            )
             raise MCPServerOwnerConflict(
                 "issue-memory MCP owner key already active."
                 f" owner_key={self.settings.server_owner_key!r}{role_suffix}{suffix}",
@@ -615,7 +682,9 @@ class MCPServerLifecycle:
                     self._owner_lock_handle = None
                     self._release_lock_handle(self._parent_lock_handle)
                     self._parent_lock_handle = None
-                    raise RuntimeError("issue-memory MCP could not acquire an unbounded lifecycle slot.")
+                    raise RuntimeError(
+                        "issue-memory MCP could not acquire an unbounded lifecycle slot."
+                    )
         else:
             for slot in range(self.max_instances):
                 if self._try_acquire_slot(slot):
@@ -626,9 +695,13 @@ class MCPServerLifecycle:
             self._release_lock_handle(self._parent_lock_handle)
             self._parent_lock_handle = None
             active = self._collect_active_slots()
-            active_pids = [int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0]
+            active_pids = [
+                int(item["pid"]) for item in active if int(item.get("pid", 0) or 0) > 0
+            ]
             suffix = f" active_pids={active_pids}" if active_pids else ""
-            raise RuntimeError(f"issue-memory MCP server instance cap reached. max_instances={self.max_instances}.{suffix}")
+            raise RuntimeError(
+                f"issue-memory MCP server instance cap reached. max_instances={self.max_instances}.{suffix}"
+            )
         self._start_time = _utc_now()
         self._started = True
         self._shutdown_reason = None
@@ -649,10 +722,16 @@ class MCPServerLifecycle:
         if not self._started:
             return
         self._monitor_stop.set()
-        if self._monitor_thread is not None and self._monitor_thread is not threading.current_thread():
+        if (
+            self._monitor_thread is not None
+            and self._monitor_thread is not threading.current_thread()
+        ):
             self._monitor_thread.join(timeout=5.0)
             if self._monitor_thread.is_alive():
-                print("issue-memory: monitor thread did not exit within timeout", file=sys.stderr)
+                print(
+                    "issue-memory: monitor thread did not exit within timeout",
+                    file=sys.stderr,
+                )
         note = self._shutdown_reason or "server-stopped"
         try:
             self._write_slot_status(running=False, note=note)
@@ -700,7 +779,9 @@ def read_server_lifecycle_status(settings: Settings) -> ServerLifecycleStatus:
         started_at=str((fallback or {}).get("started_at") or "") or None,
         initialized_at=str((fallback or {}).get("initialized_at") or "") or None,
         lock_acquired=bool(active_slots),
-        enforce_single_instance=lifecycle.max_instances == 1 if lifecycle.max_instances is not None else False,
+        enforce_single_instance=lifecycle.max_instances == 1
+        if lifecycle.max_instances is not None
+        else False,
         launch_count=launch_count,
         status_path=str(lifecycle.status_path),
         lock_path=str(lifecycle.slots_dir),

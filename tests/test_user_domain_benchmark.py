@@ -16,10 +16,14 @@ from codex_issue_memory.benchmarks import (
 class UserDomainBenchmarkTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-user-benchmark-")
+        cls.temp_dir = tempfile.TemporaryDirectory(
+            prefix="issue-memory-user-benchmark-"
+        )
         base = Path(cls.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -39,6 +43,7 @@ class UserDomainBenchmarkTests(unittest.TestCase):
 
 
 for index, case in enumerate(USER_DOMAIN_QUERY_CASES, start=1):
+
     def _make_test(current_case=case):
         def _test(self: UserDomainBenchmarkTests) -> None:
             result = self.app.issue_match(
@@ -50,10 +55,19 @@ for index, case in enumerate(USER_DOMAIN_QUERY_CASES, start=1):
                 limit=3,
             )
             self.assertTrue(result["matches"], msg=current_case.slug)
-            self.assertEqual(result["matches"][0]["title"], current_case.expected_title, msg=current_case.slug)
+            self.assertEqual(
+                result["matches"][0]["title"],
+                current_case.expected_title,
+                msg=current_case.slug,
+            )
+
         return _test
 
-    setattr(UserDomainBenchmarkTests, f"test_user_domain_case_{index:02d}_{case.slug}", _make_test())
+    setattr(
+        UserDomainBenchmarkTests,
+        f"test_user_domain_case_{index:02d}_{case.slug}",
+        _make_test(),
+    )
 
 
 if __name__ == "__main__":

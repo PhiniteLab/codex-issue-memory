@@ -45,7 +45,7 @@ class DenseEmbeddingIndex:
             self._add(vector, f"tok:{token}", 1.0)
             if len(token) >= 4:
                 for start in range(0, len(token) - 2):
-                    self._add(vector, f"tri:{token[start:start + 3]}", 0.35)
+                    self._add(vector, f"tri:{token[start : start + 3]}", 0.35)
         for left, right in zip(tokens, tokens[1:]):
             self._add(vector, f"bi:{left}_{right}", 0.50)
         # Synonym vector augmentation: add cross-pair hashes
@@ -72,7 +72,9 @@ class DenseEmbeddingIndex:
         except struct.error:
             _logger.warning(
                 "Corrupt embedding blob: expected %d floats (%d bytes), got %d bytes",
-                expected_dim, expected_dim * 4, len(blob),
+                expected_dim,
+                expected_dim * 4,
+                len(blob),
             )
             return [0.0] * expected_dim
         return [float(value) for value in values]
@@ -81,7 +83,9 @@ class DenseEmbeddingIndex:
     def _cosine(left: list[float], right: list[float]) -> float:
         if not left or not right or len(left) != len(right):
             return 0.0
-        return sum(left_value * right_value for left_value, right_value in zip(left, right))
+        return sum(
+            left_value * right_value for left_value, right_value in zip(left, right)
+        )
 
     @staticmethod
     def _compose_pattern_text(row: dict[str, Any]) -> str:
@@ -102,7 +106,11 @@ class DenseEmbeddingIndex:
     @staticmethod
     def _compose_variant_text(row: dict[str, Any]) -> str:
         raw_tags = row.get("variant_tags_json")
-        variant_tags = " ".join(str(tag) for tag in raw_tags) if isinstance(raw_tags, list) else str(raw_tags or "")
+        variant_tags = (
+            " ".join(str(tag) for tag in raw_tags)
+            if isinstance(raw_tags, list)
+            else str(raw_tags or "")
+        )
         return " ".join(
             [
                 str(row.get("pattern_title", "")),
@@ -164,7 +172,9 @@ class DenseEmbeddingIndex:
             norm=1.0,
         )
 
-    def _ensure_variant_embeddings(self, rows: list[dict[str, Any]]) -> dict[int, list[float]]:
+    def _ensure_variant_embeddings(
+        self, rows: list[dict[str, Any]]
+    ) -> dict[int, list[float]]:
         if not rows:
             return {}
         variant_ids = [int(row["variant_id"]) for row in rows]
@@ -189,10 +199,14 @@ class DenseEmbeddingIndex:
                 )
                 vectors[variant_id] = vector
             else:
-                vectors[variant_id] = self.unpack_vector(existing["vector_blob"], expected_dim=self.dim)
+                vectors[variant_id] = self.unpack_vector(
+                    existing["vector_blob"], expected_dim=self.dim
+                )
         return vectors
 
-    def _ensure_pattern_embeddings(self, rows: list[dict[str, Any]]) -> dict[int, list[float]]:
+    def _ensure_pattern_embeddings(
+        self, rows: list[dict[str, Any]]
+    ) -> dict[int, list[float]]:
         if not rows:
             return {}
         pattern_ids = [int(row["id"]) for row in rows]
@@ -217,10 +231,14 @@ class DenseEmbeddingIndex:
                 )
                 vectors[pattern_id] = vector
             else:
-                vectors[pattern_id] = self.unpack_vector(existing["vector_blob"], expected_dim=self.dim)
+                vectors[pattern_id] = self.unpack_vector(
+                    existing["vector_blob"], expected_dim=self.dim
+                )
         return vectors
 
-    def query_variants(self, profile: QueryProfile, *, project_scope: str, limit: int) -> list[dict[str, Any]]:
+    def query_variants(
+        self, profile: QueryProfile, *, project_scope: str, limit: int
+    ) -> list[dict[str, Any]]:
         rows = self.store.get_dense_variant_sources(
             project_scope=project_scope,
             error_family=profile.error_family,
@@ -288,14 +306,25 @@ class DenseEmbeddingIndex:
                 "dense_score": round(min(max(similarity, 0.0), 1.0), 6),
             }
             scored.append((similarity, candidate))
-        scored.sort(key=lambda item: (-item[0], int(item[1]["pattern_id"]), int(item[1]["variant_id"])))
+        scored.sort(
+            key=lambda item: (
+                -item[0],
+                int(item[1]["pattern_id"]),
+                int(item[1]["variant_id"]),
+            )
+        )
         results: list[dict[str, Any]] = []
         for dense_rank, (_score, candidate) in enumerate(scored[:limit], start=1):
-            candidate["retrieval_signals"] = {"dense_rank": dense_rank, "dense_score": candidate["dense_score"]}
+            candidate["retrieval_signals"] = {
+                "dense_rank": dense_rank,
+                "dense_score": candidate["dense_score"],
+            }
             results.append(candidate)
         return results
 
-    def query_patterns(self, profile: QueryProfile, *, project_scope: str, limit: int) -> list[dict[str, Any]]:
+    def query_patterns(
+        self, profile: QueryProfile, *, project_scope: str, limit: int
+    ) -> list[dict[str, Any]]:
         rows = self.store.get_dense_pattern_sources(
             project_scope=project_scope,
             error_family=profile.error_family,
@@ -343,6 +372,9 @@ class DenseEmbeddingIndex:
         scored.sort(key=lambda item: (-item[0], int(item[1]["pattern_id"])))
         results: list[dict[str, Any]] = []
         for dense_rank, (_score, candidate) in enumerate(scored[:limit], start=1):
-            candidate["retrieval_signals"] = {"dense_rank": dense_rank, "dense_score": candidate["dense_score"]}
+            candidate["retrieval_signals"] = {
+                "dense_rank": dense_rank,
+                "dense_score": candidate["dense_score"],
+            }
             results.append(candidate)
         return results

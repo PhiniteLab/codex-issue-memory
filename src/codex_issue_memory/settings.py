@@ -71,36 +71,70 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        home = Path(os.environ.get("ISSUE_MEMORY_HOME", Path.home() / ".local" / "share" / "codex-issue-memory")).expanduser()
-        db_path = Path(os.environ.get("ISSUE_MEMORY_DB_PATH", home / "issue_memory.sqlite3")).expanduser()
-        state_dir = Path(os.environ.get("ISSUE_MEMORY_STATE_DIR", Path.home() / ".local" / "state" / "codex-issue-memory")).expanduser()
-        backup_dir = Path(os.environ.get("ISSUE_MEMORY_BACKUP_DIR", home / "backups")).expanduser()
-        log_dir = Path(os.environ.get("ISSUE_MEMORY_LOG_DIR", state_dir / "log")).expanduser()
-        calibration_profile_path = Path(
-            os.environ.get("ISSUE_MEMORY_CALIBRATION_PROFILE_PATH", state_dir / "calibration_profile.json")
+        home = Path(
+            os.environ.get(
+                "ISSUE_MEMORY_HOME",
+                Path.home() / ".local" / "share" / "codex-issue-memory",
+            )
         ).expanduser()
-        server_lock_dir = Path(os.environ.get("ISSUE_MEMORY_SERVER_LOCK_DIR", state_dir / "run")).expanduser()
+        db_path = Path(
+            os.environ.get("ISSUE_MEMORY_DB_PATH", home / "issue_memory.sqlite3")
+        ).expanduser()
+        state_dir = Path(
+            os.environ.get(
+                "ISSUE_MEMORY_STATE_DIR",
+                Path.home() / ".local" / "state" / "codex-issue-memory",
+            )
+        ).expanduser()
+        backup_dir = Path(
+            os.environ.get("ISSUE_MEMORY_BACKUP_DIR", home / "backups")
+        ).expanduser()
+        log_dir = Path(
+            os.environ.get("ISSUE_MEMORY_LOG_DIR", state_dir / "log")
+        ).expanduser()
+        calibration_profile_path = Path(
+            os.environ.get(
+                "ISSUE_MEMORY_CALIBRATION_PROFILE_PATH",
+                state_dir / "calibration_profile.json",
+            )
+        ).expanduser()
+        server_lock_dir = Path(
+            os.environ.get("ISSUE_MEMORY_SERVER_LOCK_DIR", state_dir / "run")
+        ).expanduser()
 
-        raw_windows_target = os.environ.get("ISSUE_MEMORY_WINDOWS_BACKUP_TARGET", "").strip()
-        windows_target = Path(raw_windows_target).expanduser() if raw_windows_target else None
-
-        require_owner_key = os.environ.get("ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY", "0").strip().lower() not in {"0", "false", "no"}
-        allow_synthetic_owner_key = (
-            os.environ.get("ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY", "0").strip().lower()
-            not in {"0", "false", "no"}
+        raw_windows_target = os.environ.get(
+            "ISSUE_MEMORY_WINDOWS_BACKUP_TARGET", ""
+        ).strip()
+        windows_target = (
+            Path(raw_windows_target).expanduser() if raw_windows_target else None
         )
+
+        require_owner_key = os.environ.get(
+            "ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY", "0"
+        ).strip().lower() not in {"0", "false", "no"}
+        allow_synthetic_owner_key = os.environ.get(
+            "ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY", "0"
+        ).strip().lower() not in {"0", "false", "no"}
         raw_max_instances = os.environ.get("ISSUE_MEMORY_MAX_MCP_INSTANCES", "").strip()
-        compat_single_cap = os.environ.get("ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE", "1").strip().lower() not in {"0", "false", "no"}
+        compat_single_cap = os.environ.get(
+            "ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE", "1"
+        ).strip().lower() not in {"0", "false", "no"}
         if raw_max_instances:
             try:
                 parsed_max_instances = int(raw_max_instances)
             except ValueError:
                 max_mcp_instances = None if require_owner_key else 2
             else:
-                max_mcp_instances = None if parsed_max_instances <= 0 else max(parsed_max_instances, 1)
+                max_mcp_instances = (
+                    None if parsed_max_instances <= 0 else max(parsed_max_instances, 1)
+                )
         else:
-            max_mcp_instances = None if require_owner_key else (1 if compat_single_cap else 2)
-        raw_duplicate_exit_code = os.environ.get("ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE", "").strip()
+            max_mcp_instances = (
+                None if require_owner_key else (1 if compat_single_cap else 2)
+            )
+        raw_duplicate_exit_code = os.environ.get(
+            "ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE", ""
+        ).strip()
         if raw_duplicate_exit_code:
             try:
                 duplicate_exit_code = max(int(raw_duplicate_exit_code), 0)
@@ -115,18 +149,25 @@ class Settings:
             or os.environ.get("ISSUE_MEMORY_MCP_OWNER_KEY_ENV", "").strip()
         )
 
-        server_enforce_parent_singleton = (
-            os.environ.get("ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON", "0").strip().lower()
-            not in {"0", "false", "no"}
-        )
-        raw_idle_timeout = os.environ.get("ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS", "0").strip()
+        server_enforce_parent_singleton = os.environ.get(
+            "ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON", "0"
+        ).strip().lower() not in {"0", "false", "no"}
+        raw_idle_timeout = os.environ.get(
+            "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS", "0"
+        ).strip()
         try:
-            server_parent_instance_idle_timeout_seconds = max(int(raw_idle_timeout or "0"), 0)
+            server_parent_instance_idle_timeout_seconds = max(
+                int(raw_idle_timeout or "0"), 0
+            )
         except ValueError:
             server_parent_instance_idle_timeout_seconds = 0
-        raw_parent_monitor_interval = os.environ.get("ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS", "1.0").strip()
+        raw_parent_monitor_interval = os.environ.get(
+            "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS", "1.0"
+        ).strip()
         try:
-            server_parent_instance_monitor_interval_seconds = max(float(raw_parent_monitor_interval or "1.0"), 0.2)
+            server_parent_instance_monitor_interval_seconds = max(
+                float(raw_parent_monitor_interval or "1.0"), 0.2
+            )
         except ValueError:
             server_parent_instance_monitor_interval_seconds = 1.0
         owner_key = ""
@@ -143,17 +184,23 @@ class Settings:
                 break
         if not owner_key and owner_key_env:
             owner_key = os.environ.get(owner_key_env, "").strip()
-        elif owner_key and not owner_key_env and owner_key_source == "ISSUE_MEMORY_MAIN_CONVERSATION_KEY":
+        elif (
+            owner_key
+            and not owner_key_env
+            and owner_key_source == "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"
+        ):
             owner_key_env = owner_key_source
         current_codex_thread = os.environ.get("CODEX_THREAD_ID", "").strip()
         if not owner_key:
-            derived_owner_key = _resolve_owner_key_from_codex_session_lineage(current_codex_thread)
+            derived_owner_key = _resolve_owner_key_from_codex_session_lineage(
+                current_codex_thread
+            )
             if derived_owner_key:
                 owner_key = derived_owner_key
                 owner_key_env = "CODEX_THREAD_ID"
         if not owner_key:
-            inherited_owner_key, inherited_owner_key_env, inherited_codex_thread = _resolve_owner_key_from_parent_process_lineage(
-                owner_key_env
+            inherited_owner_key, inherited_owner_key_env, inherited_codex_thread = (
+                _resolve_owner_key_from_parent_process_lineage(owner_key_env)
             )
             if inherited_owner_key:
                 owner_key = inherited_owner_key
@@ -162,7 +209,9 @@ class Settings:
                 if not current_codex_thread and inherited_codex_thread:
                     current_codex_thread = inherited_codex_thread
         if not owner_key:
-            inferred_owner_key, _inferred_codex_thread = _resolve_owner_key_from_recent_codex_sessions()
+            inferred_owner_key, _inferred_codex_thread = (
+                _resolve_owner_key_from_recent_codex_sessions()
+            )
             if inferred_owner_key:
                 owner_key = inferred_owner_key
                 owner_key_env = "CODEX_THREAD_ID"
@@ -174,9 +223,18 @@ class Settings:
             or os.environ.get("ISSUE_MEMORY_SERVER_OWNER_ROLE", "").strip()
             or os.environ.get("ISSUE_MEMORY_MCP_OWNER_ROLE", "").strip()
         )
-        if not owner_role and owner_key_env == "CODEX_THREAD_ID" and current_codex_thread and owner_key:
+        if (
+            not owner_role
+            and owner_key_env == "CODEX_THREAD_ID"
+            and current_codex_thread
+            and owner_key
+        ):
             owner_role = "main" if current_codex_thread == owner_key else "subagent"
-        if not owner_role and owner_key_env == "ISSUE_MEMORY_SYNTHETIC_OWNER_KEY" and owner_key:
+        if (
+            not owner_role
+            and owner_key_env == "ISSUE_MEMORY_SYNTHETIC_OWNER_KEY"
+            and owner_key
+        ):
             owner_role = "anonymous"
 
         settings = cls(
@@ -187,40 +245,140 @@ class Settings:
             backup_dir=backup_dir,
             windows_backup_target=windows_target,
             calibration_profile_path=calibration_profile_path,
-            local_backup_keep=int(os.environ.get("ISSUE_MEMORY_LOCAL_BACKUP_KEEP", "30")),
-            mirror_backup_keep=int(os.environ.get("ISSUE_MEMORY_MIRROR_BACKUP_KEEP", "15")),
+            local_backup_keep=int(
+                os.environ.get("ISSUE_MEMORY_LOCAL_BACKUP_KEEP", "30")
+            ),
+            mirror_backup_keep=int(
+                os.environ.get("ISSUE_MEMORY_MIRROR_BACKUP_KEEP", "15")
+            ),
             hostname=socket.gethostname(),
-            default_user_scope=os.environ.get("ISSUE_MEMORY_DEFAULT_USER_SCOPE", "").strip(),
-            match_accept_threshold=float(os.environ.get("ISSUE_MEMORY_MATCH_ACCEPT_THRESHOLD", "0.68")),
-            match_weak_threshold=float(os.environ.get("ISSUE_MEMORY_MATCH_WEAK_THRESHOLD", "0.40")),
-            ambiguity_margin=float(os.environ.get("ISSUE_MEMORY_AMBIGUITY_MARGIN", "0.09")),
-            session_ttl_seconds=int(os.environ.get("ISSUE_MEMORY_SESSION_TTL_SECONDS", "21600")),
-            telemetry_enabled=os.environ.get("ISSUE_MEMORY_TELEMETRY_ENABLED", "1").strip().lower() not in {"0", "false", "no"},
-            enable_dense_retrieval=os.environ.get("ISSUE_MEMORY_ENABLE_DENSE_RETRIEVAL", "1").strip().lower() not in {"0", "false", "no"},
-            dense_embedding_dim=max(int(os.environ.get("ISSUE_MEMORY_DENSE_EMBEDDING_DIM", "192")), 32),
-            dense_candidate_limit=max(int(os.environ.get("ISSUE_MEMORY_DENSE_CANDIDATE_LIMIT", "16")), 4),
-            dense_similarity_floor=float(os.environ.get("ISSUE_MEMORY_DENSE_SIMILARITY_FLOOR", "0.12")),
-            dense_model_name=os.environ.get("ISSUE_MEMORY_DENSE_MODEL_NAME", "hash-ngrams-v1").strip() or "hash-ngrams-v1",
-            enable_strategy_bandit=os.environ.get("ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT", "0").strip().lower() not in {"0", "false", "no"},
-            enable_strategy_bandit_shadow_mode=os.environ.get("ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE", "0").strip().lower() not in {"0", "false", "no"},
-            strategy_overlay_scale=float(os.environ.get("ISSUE_MEMORY_STRATEGY_OVERLAY_SCALE", "0.20")),
-            variant_overlay_scale=float(os.environ.get("ISSUE_MEMORY_VARIANT_OVERLAY_SCALE", "0.08")),
-            safe_override_margin=float(os.environ.get("ISSUE_MEMORY_SAFE_OVERRIDE_MARGIN", "0.03")),
-            minimum_strategy_evidence=max(int(os.environ.get("ISSUE_MEMORY_MINIMUM_STRATEGY_EVIDENCE", "3")), 1),
-            strategy_half_life_days=max(int(os.environ.get("ISSUE_MEMORY_STRATEGY_HALF_LIFE_DAYS", "75")), 1),
-            variant_half_life_days=max(int(os.environ.get("ISSUE_MEMORY_VARIANT_HALF_LIFE_DAYS", "35")), 1),
-            enable_preference_rules=os.environ.get("ISSUE_MEMORY_ENABLE_PREFERENCE_RULES", "1").strip().lower() not in {"0", "false", "no"},
-            preference_overlay_scale=float(os.environ.get("ISSUE_MEMORY_PREFERENCE_OVERLAY_SCALE", "1.0")),
-            max_preference_adjustment=float(os.environ.get("ISSUE_MEMORY_MAX_PREFERENCE_ADJUSTMENT", "0.18")),
-            guardrail_limit=max(int(os.environ.get("ISSUE_MEMORY_GUARDRAIL_LIMIT", "5")), 1),
-            telemetry_retention_days=max(int(os.environ.get("ISSUE_MEMORY_TELEMETRY_RETENTION_DAYS", "90")), 1),
-            resolved_review_retention_days=max(int(os.environ.get("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", "120")), 1),
-            enable_redaction=os.environ.get("ISSUE_MEMORY_ENABLE_REDACTION", "1").strip().lower() not in {"0", "false", "no"},
-            enable_calibration_profile=os.environ.get("ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE", "1").strip().lower() not in {"0", "false", "no"},
-            session_decay_half_life_minutes=max(float(os.environ.get("ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES", "30.0")), 1.0),
-            implicit_feedback_timeout_minutes=max(int(os.environ.get("ISSUE_MEMORY_IMPLICIT_FEEDBACK_TIMEOUT_MINUTES", "30")), 5),
-            enable_cross_session_learning=os.environ.get("ISSUE_MEMORY_ENABLE_CROSS_SESSION_LEARNING", "0").strip().lower() not in {"0", "false", "no"},
-            auto_rejection_threshold=max(int(os.environ.get("ISSUE_MEMORY_AUTO_REJECTION_THRESHOLD", "3")), 2),
+            default_user_scope=os.environ.get(
+                "ISSUE_MEMORY_DEFAULT_USER_SCOPE", ""
+            ).strip(),
+            match_accept_threshold=float(
+                os.environ.get("ISSUE_MEMORY_MATCH_ACCEPT_THRESHOLD", "0.68")
+            ),
+            match_weak_threshold=float(
+                os.environ.get("ISSUE_MEMORY_MATCH_WEAK_THRESHOLD", "0.40")
+            ),
+            ambiguity_margin=float(
+                os.environ.get("ISSUE_MEMORY_AMBIGUITY_MARGIN", "0.09")
+            ),
+            session_ttl_seconds=int(
+                os.environ.get("ISSUE_MEMORY_SESSION_TTL_SECONDS", "21600")
+            ),
+            telemetry_enabled=os.environ.get("ISSUE_MEMORY_TELEMETRY_ENABLED", "1")
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            enable_dense_retrieval=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_DENSE_RETRIEVAL", "1"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            dense_embedding_dim=max(
+                int(os.environ.get("ISSUE_MEMORY_DENSE_EMBEDDING_DIM", "192")), 32
+            ),
+            dense_candidate_limit=max(
+                int(os.environ.get("ISSUE_MEMORY_DENSE_CANDIDATE_LIMIT", "16")), 4
+            ),
+            dense_similarity_floor=float(
+                os.environ.get("ISSUE_MEMORY_DENSE_SIMILARITY_FLOOR", "0.12")
+            ),
+            dense_model_name=os.environ.get(
+                "ISSUE_MEMORY_DENSE_MODEL_NAME", "hash-ngrams-v1"
+            ).strip()
+            or "hash-ngrams-v1",
+            enable_strategy_bandit=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT", "0"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            enable_strategy_bandit_shadow_mode=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE", "0"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            strategy_overlay_scale=float(
+                os.environ.get("ISSUE_MEMORY_STRATEGY_OVERLAY_SCALE", "0.20")
+            ),
+            variant_overlay_scale=float(
+                os.environ.get("ISSUE_MEMORY_VARIANT_OVERLAY_SCALE", "0.08")
+            ),
+            safe_override_margin=float(
+                os.environ.get("ISSUE_MEMORY_SAFE_OVERRIDE_MARGIN", "0.03")
+            ),
+            minimum_strategy_evidence=max(
+                int(os.environ.get("ISSUE_MEMORY_MINIMUM_STRATEGY_EVIDENCE", "3")), 1
+            ),
+            strategy_half_life_days=max(
+                int(os.environ.get("ISSUE_MEMORY_STRATEGY_HALF_LIFE_DAYS", "75")), 1
+            ),
+            variant_half_life_days=max(
+                int(os.environ.get("ISSUE_MEMORY_VARIANT_HALF_LIFE_DAYS", "35")), 1
+            ),
+            enable_preference_rules=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_PREFERENCE_RULES", "1"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            preference_overlay_scale=float(
+                os.environ.get("ISSUE_MEMORY_PREFERENCE_OVERLAY_SCALE", "1.0")
+            ),
+            max_preference_adjustment=float(
+                os.environ.get("ISSUE_MEMORY_MAX_PREFERENCE_ADJUSTMENT", "0.18")
+            ),
+            guardrail_limit=max(
+                int(os.environ.get("ISSUE_MEMORY_GUARDRAIL_LIMIT", "5")), 1
+            ),
+            telemetry_retention_days=max(
+                int(os.environ.get("ISSUE_MEMORY_TELEMETRY_RETENTION_DAYS", "90")), 1
+            ),
+            resolved_review_retention_days=max(
+                int(
+                    os.environ.get("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", "120")
+                ),
+                1,
+            ),
+            enable_redaction=os.environ.get("ISSUE_MEMORY_ENABLE_REDACTION", "1")
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            enable_calibration_profile=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE", "1"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            session_decay_half_life_minutes=max(
+                float(
+                    os.environ.get(
+                        "ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES", "30.0"
+                    )
+                ),
+                1.0,
+            ),
+            implicit_feedback_timeout_minutes=max(
+                int(
+                    os.environ.get(
+                        "ISSUE_MEMORY_IMPLICIT_FEEDBACK_TIMEOUT_MINUTES", "30"
+                    )
+                ),
+                5,
+            ),
+            enable_cross_session_learning=os.environ.get(
+                "ISSUE_MEMORY_ENABLE_CROSS_SESSION_LEARNING", "0"
+            )
+            .strip()
+            .lower()
+            not in {"0", "false", "no"},
+            auto_rejection_threshold=max(
+                int(os.environ.get("ISSUE_MEMORY_AUTO_REJECTION_THRESHOLD", "3")), 2
+            ),
             max_mcp_instances=max_mcp_instances,
             server_lock_dir=server_lock_dir,
             server_duplicate_exit_code=duplicate_exit_code,
@@ -231,12 +389,36 @@ class Settings:
             server_owner_key=owner_key,
             server_owner_key_env=owner_key_env,
             server_owner_role=owner_role,
-            fp_rate_alarm_threshold=max(float(os.environ.get("ISSUE_MEMORY_FP_RATE_ALARM_THRESHOLD", "0.15")), 0.01),
-            feedback_batch_window_seconds=max(int(os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS", "300")), 0),
-            feedback_batch_fp_review_threshold=max(int(os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD", "5")), 2),
-            env_json_max_chars=max(int(os.environ.get("ISSUE_MEMORY_ENV_JSON_MAX_CHARS", "4000")), 256),
-            verification_output_max_chars=max(int(os.environ.get("ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS", "4000")), 256),
-            note_max_chars=max(int(os.environ.get("ISSUE_MEMORY_NOTE_MAX_CHARS", "2000")), 128),
+            fp_rate_alarm_threshold=max(
+                float(os.environ.get("ISSUE_MEMORY_FP_RATE_ALARM_THRESHOLD", "0.15")),
+                0.01,
+            ),
+            feedback_batch_window_seconds=max(
+                int(
+                    os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS", "300")
+                ),
+                0,
+            ),
+            feedback_batch_fp_review_threshold=max(
+                int(
+                    os.environ.get(
+                        "ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD", "5"
+                    )
+                ),
+                2,
+            ),
+            env_json_max_chars=max(
+                int(os.environ.get("ISSUE_MEMORY_ENV_JSON_MAX_CHARS", "4000")), 256
+            ),
+            verification_output_max_chars=max(
+                int(
+                    os.environ.get("ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS", "4000")
+                ),
+                256,
+            ),
+            note_max_chars=max(
+                int(os.environ.get("ISSUE_MEMORY_NOTE_MAX_CHARS", "2000")), 128
+            ),
         )
         settings.ensure_dirs()
         return settings
@@ -276,7 +458,9 @@ def _resolve_owner_key_from_codex_session_lineage(thread_id: str) -> str:
     return ""
 
 
-def _resolve_owner_key_from_parent_process_lineage(owner_key_env: str) -> tuple[str, str, str]:
+def _resolve_owner_key_from_parent_process_lineage(
+    owner_key_env: str,
+) -> tuple[str, str, str]:
     """Best-effort owner-key recovery from parent/ancestor process environments.
 
     Some MCP launchers replace the child environment instead of merging it with the
@@ -310,13 +494,17 @@ def _resolve_owner_key_from_parent_process_lineage(owner_key_env: str) -> tuple[
         parent_codex_thread = str(env.get("CODEX_THREAD_ID", "")).strip()
         if not parent_codex_thread:
             continue
-        derived_owner_key = _resolve_owner_key_from_codex_session_lineage(parent_codex_thread)
+        derived_owner_key = _resolve_owner_key_from_codex_session_lineage(
+            parent_codex_thread
+        )
         if derived_owner_key:
             return derived_owner_key, "CODEX_THREAD_ID", parent_codex_thread
     return "", "", ""
 
 
-def _resolve_owner_key_from_recent_codex_sessions(max_candidates: int = 32) -> tuple[str, str]:
+def _resolve_owner_key_from_recent_codex_sessions(
+    max_candidates: int = 32,
+) -> tuple[str, str]:
     """Infer a single active owner key from the newest Codex session files.
 
     This is a last-resort fallback for MCP launch environments that expose neither
@@ -329,13 +517,17 @@ def _resolve_owner_key_from_recent_codex_sessions(max_candidates: int = 32) -> t
     if not sessions_root.exists():
         return "", ""
     try:
-        session_files = sorted(sessions_root.rglob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
+        session_files = sorted(
+            sessions_root.rglob("*.jsonl"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
     except OSError:
         return "", ""
 
     newest_thread_id = ""
     resolved_owner_keys: set[str] = set()
-    for path in session_files[:max(max_candidates, 1)]:
+    for path in session_files[: max(max_candidates, 1)]:
         payload = _read_codex_session_payload(path)
         if not isinstance(payload, dict):
             continue
@@ -424,7 +616,9 @@ def _codex_sessions_root() -> Path:
     return codex_home / "sessions"
 
 
-def _load_codex_session_payload(thread_id: str, sessions_root: Path) -> dict[str, object] | None:
+def _load_codex_session_payload(
+    thread_id: str, sessions_root: Path
+) -> dict[str, object] | None:
     session_path = _find_codex_session_file(thread_id, sessions_root)
     if session_path is None:
         return None
@@ -433,7 +627,9 @@ def _load_codex_session_payload(thread_id: str, sessions_root: Path) -> dict[str
 
 def _read_codex_session_payload(session_path: Path) -> dict[str, object] | None:
     try:
-        first_line = session_path.read_text(encoding="utf-8", errors="ignore").splitlines()[0]
+        first_line = session_path.read_text(
+            encoding="utf-8", errors="ignore"
+        ).splitlines()[0]
         record = json.loads(first_line)
     except (IndexError, OSError, ValueError, TypeError):
         return None

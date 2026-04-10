@@ -5,18 +5,90 @@ from typing import Iterable
 from .text import normalize_text
 
 _STRATEGY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("resolve_from___file__", ("__file__", "relative to __file__", "avoid cwd", "cwd dependency", "resolve path relative")),
-    ("discover_repo_root", ("repo root", "project root", "git rev-parse", "find root", "repository root")),
-    ("move_path_to_config", ("move path to config", "configure path", "settings file", "config path")),
-    ("fix_interpreter_or_venv", ("virtualenv", "venv", "wrong interpreter", "pythonpath", "interpreter mismatch")),
-    ("install_missing_dependency", ("pip install", "poetry add", "module not found", "no module named", "missing dependency")),
-    ("repair_package_layout", ("package layout", "__init__", "editable install", "python -m", "import path")),
-    ("add_preflight_validation", ("fail-fast", "preflight", "validate", "validation", "assert key", "missing key")),
-    ("boundary_cast_float32", ("float32", "cast", "dtype mismatch", "astype", ".float()")),
-    ("assert_shape_contract", ("shape mismatch", "size mismatch", "dimension mismatch", "shape contract", "unexpected shape")),
-    ("move_batch_to_device_boundary", ("same device", "move to device", "cuda", "tensor device", "batch to device")),
-    ("rehome_optimizer_state", ("optimizer state", "resume optimizer", "checkpoint resume", "optimizer resume")),
-    ("optional_import_guard", ("optional import", "fallback import", "soft dependency", "try/except import")),
+    (
+        "resolve_from___file__",
+        (
+            "__file__",
+            "relative to __file__",
+            "avoid cwd",
+            "cwd dependency",
+            "resolve path relative",
+        ),
+    ),
+    (
+        "discover_repo_root",
+        ("repo root", "project root", "git rev-parse", "find root", "repository root"),
+    ),
+    (
+        "move_path_to_config",
+        ("move path to config", "configure path", "settings file", "config path"),
+    ),
+    (
+        "fix_interpreter_or_venv",
+        (
+            "virtualenv",
+            "venv",
+            "wrong interpreter",
+            "pythonpath",
+            "interpreter mismatch",
+        ),
+    ),
+    (
+        "install_missing_dependency",
+        (
+            "pip install",
+            "poetry add",
+            "module not found",
+            "no module named",
+            "missing dependency",
+        ),
+    ),
+    (
+        "repair_package_layout",
+        ("package layout", "__init__", "editable install", "python -m", "import path"),
+    ),
+    (
+        "add_preflight_validation",
+        (
+            "fail-fast",
+            "preflight",
+            "validate",
+            "validation",
+            "assert key",
+            "missing key",
+        ),
+    ),
+    (
+        "boundary_cast_float32",
+        ("float32", "cast", "dtype mismatch", "astype", ".float()"),
+    ),
+    (
+        "assert_shape_contract",
+        (
+            "shape mismatch",
+            "size mismatch",
+            "dimension mismatch",
+            "shape contract",
+            "unexpected shape",
+        ),
+    ),
+    (
+        "move_batch_to_device_boundary",
+        ("same device", "move to device", "cuda", "tensor device", "batch to device"),
+    ),
+    (
+        "rehome_optimizer_state",
+        (
+            "optimizer state",
+            "resume optimizer",
+            "checkpoint resume",
+            "optimizer resume",
+        ),
+    ),
+    (
+        "optional_import_guard",
+        ("optional import", "fallback import", "soft dependency", "try/except import"),
+    ),
 )
 
 _PRIORITY = [name for name, _patterns in _STRATEGY_RULES]

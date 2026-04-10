@@ -47,21 +47,34 @@ class HeuristicRanker:
         "session_penalty_score": -0.24,
     }
 
-    def __init__(self, store: IssueMemoryStore | None = None, settings: Settings | None = None) -> None:
+    def __init__(
+        self, store: IssueMemoryStore | None = None, settings: Settings | None = None
+    ) -> None:
         self.store = store
         self.settings = settings
         self._weight_overrides: dict[str, dict[str, float]] = {}
-        if store is not None and settings is not None and settings.enable_calibration_profile:
+        if (
+            store is not None
+            and settings is not None
+            and settings.enable_calibration_profile
+        ):
             profile = store.load_calibration_profile()
-            raw_overrides = profile.get("weight_overrides") if isinstance(profile, dict) else None
+            raw_overrides = (
+                profile.get("weight_overrides") if isinstance(profile, dict) else None
+            )
             if isinstance(raw_overrides, dict):
                 for family, overrides in raw_overrides.items():
                     if isinstance(overrides, dict):
                         self._weight_overrides[str(family)] = {
-                            str(k): float(v) for k, v in overrides.items()
+                            str(k): float(v)
+                            for k, v in overrides.items()
                             if str(k) in self.DEFAULT_WEIGHTS
                         }
-        strategy_bandit_active = store is not None and settings is not None and settings.enable_strategy_bandit
+        strategy_bandit_active = (
+            store is not None
+            and settings is not None
+            and settings.enable_strategy_bandit
+        )
         self.strategy_bandit = (
             StrategyThompsonBandit(store, settings)
             if strategy_bandit_active and store is not None and settings is not None
@@ -100,7 +113,11 @@ class HeuristicRanker:
         candidate: dict[str, Any],
         preference_rules: list[dict[str, Any]] | None,
     ) -> tuple[float, list[str]]:
-        if not preference_rules or self.settings is None or not self.settings.enable_preference_rules:
+        if (
+            not preference_rules
+            or self.settings is None
+            or not self.settings.enable_preference_rules
+        ):
             return 0.0, []
         variant = candidate.get("best_variant") or {}
         strategy_key = str(variant.get("strategy_key", "")).strip()
@@ -114,7 +131,10 @@ class HeuristicRanker:
             if not rule_strategy or rule_strategy != strategy_key:
                 continue
             rule_family = str(rule.get("error_family", "")).strip()
-            if rule_family and rule_family not in {candidate_family, profile.error_family}:
+            if rule_family and rule_family not in {
+                candidate_family,
+                profile.error_family,
+            }:
                 continue
             contribution = (
                 float(rule.get("weight", 0.0))
@@ -148,22 +168,36 @@ class HeuristicRanker:
         ei_weights: dict[str, float] | None = None
         if self.store is not None and error_family:
             variant = candidate.get("best_variant") or {}
-            raw_entity_slots = variant.get("entity_slots_json") if isinstance(variant, dict) else {}
-            entity_slots = raw_entity_slots if isinstance(raw_entity_slots, dict) else {}
-            all_keys = list(set(list(profile.entity_slots.keys()) + list(entity_slots.keys())))
+            raw_entity_slots = (
+                variant.get("entity_slots_json") if isinstance(variant, dict) else {}
+            )
+            entity_slots = (
+                raw_entity_slots if isinstance(raw_entity_slots, dict) else {}
+            )
+            all_keys = list(
+                set(list(profile.entity_slots.keys()) + list(entity_slots.keys()))
+            )
             if all_keys:
                 ei_weights = self.store.query_entity_importance(error_family, all_keys)
 
         features, reasons = build_candidate_features(
-            profile, candidate, project_scope=project_scope,
+            profile,
+            candidate,
+            project_scope=project_scope,
             entity_importance=ei_weights if ei_weights else None,
         )
-        weights = self._weights_for_family(error_family) if error_family else self.DEFAULT_WEIGHTS
+        weights = (
+            self._weights_for_family(error_family)
+            if error_family
+            else self.DEFAULT_WEIGHTS
+        )
         base_total = 0.0
         for name, weight in weights.items():
             base_total += weight * features.get(name, 0.0)
 
-        preference_adjustment, preference_reasons = self._preference_adjustment(profile, candidate, preference_rules)
+        preference_adjustment, preference_reasons = self._preference_adjustment(
+            profile, candidate, preference_rules
+        )
         for reason in preference_reasons:
             if reason not in reasons:
                 reasons.append(reason)
@@ -174,7 +208,9 @@ class HeuristicRanker:
         features["preference_adjustment"] = preference_adjustment
         features["strategy_bandit_adjustment"] = 0.0
         features["strategy_bandit_final_score"] = total
-        return RankedCandidate(candidate=candidate, score=total, features=features, reasons=reasons)
+        return RankedCandidate(
+            candidate=candidate, score=total, features=features, reasons=reasons
+        )
 
     @staticmethod
     def _quantize(value: float) -> int:
@@ -187,7 +223,11 @@ class HeuristicRanker:
     ) -> tuple[int, int, int, int, int, int, int, int, int, int, int]:
         candidate = item.candidate
         best_variant = candidate.get("best_variant") or {}
-        variant_confidence = float(best_variant.get("confidence", 0.0)) if isinstance(best_variant, dict) else 0.0
+        variant_confidence = (
+            float(best_variant.get("confidence", 0.0))
+            if isinstance(best_variant, dict)
+            else 0.0
+        )
         variant_id = int(candidate.get("variant_id", 0) or 0)
         pattern_id = int(candidate.get("pattern_id", candidate.get("id", 10**9)))
         _q = HeuristicRanker._quantize
@@ -217,7 +257,9 @@ class HeuristicRanker:
         head = ranked[:evaluation_limit]
         tail = ranked[evaluation_limit:]
 
-        analyses = self.strategy_bandit.score_candidates(profile, head, project_scope=profile.project_scope)
+        analyses = self.strategy_bandit.score_candidates(
+            profile, head, project_scope=profile.project_scope
+        )
         if not analyses:
             return ranked
 
@@ -239,18 +281,26 @@ class HeuristicRanker:
                 continue
             item.features["strategy_bandit_adjustment"] = float(analysis.adjustment)
             item.features["strategy_bandit_final_score"] = float(analysis.final_score)
-            item.features["strategy_posterior_mean_score"] = float(analysis.strategy_mean)
+            item.features["strategy_posterior_mean_score"] = float(
+                analysis.strategy_mean
+            )
             item.features["strategy_sample_score"] = float(analysis.strategy_sample)
             item.features["variant_posterior_mean_score"] = float(analysis.variant_mean)
             item.features["variant_sample_score"] = float(analysis.variant_sample)
-            item.features["negative_applicability_penalty"] = float(analysis.negative_penalty)
+            item.features["negative_applicability_penalty"] = float(
+                analysis.negative_penalty
+            )
             if analysis.adjustment > 1e-9:
                 item.features["bandit_adjustment"] = float(analysis.adjustment)
             for reason in analysis.reasons:
                 if reason not in item.reasons:
                     item.reasons.append(reason)
 
-        shadow_mode = bool(self.settings.enable_strategy_bandit_shadow_mode) if self.settings is not None else False
+        shadow_mode = (
+            bool(self.settings.enable_strategy_bandit_shadow_mode)
+            if self.settings is not None
+            else False
+        )
         if promoted_key is not None and shadow_mode:
             for item in head:
                 key = self._candidate_key(item)
@@ -258,10 +308,18 @@ class HeuristicRanker:
                 if analysis is None:
                     continue
                 item.features["strategy_bandit_shadow_mode"] = 1.0
-                item.features["strategy_bandit_shadow_promoted"] = 1.0 if key == promoted_key else 0.0
-                if key == promoted_key and "strategy-bandit-shadow-promote" not in item.reasons:
+                item.features["strategy_bandit_shadow_promoted"] = (
+                    1.0 if key == promoted_key else 0.0
+                )
+                if (
+                    key == promoted_key
+                    and "strategy-bandit-shadow-promote" not in item.reasons
+                ):
                     item.reasons.insert(0, "strategy-bandit-shadow-promote")
-                elif key == baseline_key and "strategy-bandit-shadow-hold" not in item.reasons:
+                elif (
+                    key == baseline_key
+                    and "strategy-bandit-shadow-hold" not in item.reasons
+                ):
                     item.reasons.append("strategy-bandit-shadow-hold")
             head = [baseline] + sorted(head[1:], key=self._sort_key)
         elif promoted_key is not None:
@@ -271,7 +329,10 @@ class HeuristicRanker:
                 if analysis is None:
                     continue
                 item.score = float(analysis.final_score)
-                if key == promoted_key and "strategy-bandit-safe-override" not in item.reasons:
+                if (
+                    key == promoted_key
+                    and "strategy-bandit-safe-override" not in item.reasons
+                ):
                     item.reasons.insert(0, "strategy-bandit-safe-override")
             head.sort(
                 key=lambda item: (
@@ -289,7 +350,9 @@ class HeuristicRanker:
                 analysis = analyses.get(key)
                 if analysis is None:
                     continue
-                item.score = min(float(analysis.final_score), max(baseline_score - 0.001, 0.0))
+                item.score = min(
+                    float(analysis.final_score), max(baseline_score - 0.001, 0.0)
+                )
             rest = sorted(head[1:], key=self._sort_key)
             head = [baseline] + rest
 
@@ -305,19 +368,23 @@ class HeuristicRanker:
         use_strategy_overlay: bool = False,
     ) -> list[RankedCandidate]:
         preference_rules = (
-            self.store.load_matching_preference_rules(profile=profile, project_scope=project_scope)
-            if self.store is not None and self.settings is not None and self.settings.enable_preference_rules
+            self.store.load_matching_preference_rules(
+                profile=profile, project_scope=project_scope
+            )
+            if self.store is not None
+            and self.settings is not None
+            and self.settings.enable_preference_rules
             else []
         )
         error_family = getattr(profile, "error_family", "") or ""
         ranked = [
-                self.score(
-                    profile,
-                    candidate,
-                    project_scope=project_scope,
-                    preference_rules=preference_rules,
-                    error_family=error_family,
-                )
+            self.score(
+                profile,
+                candidate,
+                project_scope=project_scope,
+                preference_rules=preference_rules,
+                error_family=error_family,
+            )
             for candidate in candidates
         ]
         ranked.sort(key=self._sort_key)

@@ -14,13 +14,17 @@ from .text import tokenize
 
 
 def _slug_component(text: str, *, fallback: str) -> str:
-    value = re.sub(r'[^a-z0-9_\-]+', '-', text.lower()).strip('-')
+    value = re.sub(r"[^a-z0-9_\-]+", "-", text.lower()).strip("-")
     return value or fallback
 
 
-def build_symptom_cluster(*, title: str = '', canonical_symptom: str = '', tags: Iterable[str] | None = None) -> str:
-    signature_tokens = tokenize(' '.join([title, canonical_symptom, ' '.join(tags or [])]), max_tokens=8)
-    return '-'.join(signature_tokens[:5]) if signature_tokens else 'generic'
+def build_symptom_cluster(
+    *, title: str = "", canonical_symptom: str = "", tags: Iterable[str] | None = None
+) -> str:
+    signature_tokens = tokenize(
+        " ".join([title, canonical_symptom, " ".join(tags or [])]), max_tokens=8
+    )
+    return "-".join(signature_tokens[:5]) if signature_tokens else "generic"
 
 
 def make_pattern_key(
@@ -33,22 +37,24 @@ def make_pattern_key(
     tags: list[str],
 ) -> str:
     """Stable key for the abstract issue pattern layer."""
-    scope = _slug_component(project_scope, fallback='global')
-    family = _slug_component(error_family, fallback='generic')
-    root = _slug_component(root_cause_class, fallback='unknown')
-    cluster = build_symptom_cluster(title=title, canonical_symptom=canonical_symptom, tags=tags)
-    return f'{scope}|{family}|{root}|{cluster}'
+    scope = _slug_component(project_scope, fallback="global")
+    family = _slug_component(error_family, fallback="generic")
+    root = _slug_component(root_cause_class, fallback="unknown")
+    cluster = build_symptom_cluster(
+        title=title, canonical_symptom=canonical_symptom, tags=tags
+    )
+    return f"{scope}|{family}|{root}|{cluster}"
 
 
 def make_variant_key(
     *,
     pattern_key: str,
-    command: str = '',
-    file_path: str = '',
-    stack_excerpt: str = '',
+    command: str = "",
+    file_path: str = "",
+    stack_excerpt: str = "",
     env_json: str | dict[str, Any] | list[Any] | None = None,
-    repo_name: str = '',
-    git_commit: str = '',
+    repo_name: str = "",
+    git_commit: str = "",
 ) -> str:
     """Stable key for context-specific variants within one abstract pattern."""
     components = [
@@ -65,7 +71,9 @@ def make_variant_key(
     ]
     non_empty = [item for item in components if item]
     if not non_empty:
-        return f'{pattern_key}|variant:default'
-    digest = sha256('||'.join([pattern_key, *non_empty]).encode('utf-8')).hexdigest()[:16]
-    context_descriptor = '|'.join(non_empty)
-    return f'{pattern_key}|variant:{digest}|{context_descriptor}'
+        return f"{pattern_key}|variant:default"
+    digest = sha256("||".join([pattern_key, *non_empty]).encode("utf-8")).hexdigest()[
+        :16
+    ]
+    context_descriptor = "|".join(non_empty)
+    return f"{pattern_key}|variant:{digest}|{context_descriptor}"

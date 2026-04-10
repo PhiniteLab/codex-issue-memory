@@ -33,7 +33,9 @@ class ConcurrentStorageWriteTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-concurrent-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -151,7 +153,9 @@ class LifecycleLockLeakTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-lock-leak-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -217,7 +221,9 @@ class BackupStreamingHashTests(unittest.TestCase):
 
         try:
             expected = sha256_ref(data).hexdigest()
-            settings = Settings.from_env() if "ISSUE_MEMORY_HOME" in os.environ else None
+            settings = (
+                Settings.from_env() if "ISSUE_MEMORY_HOME" in os.environ else None
+            )
             if settings is None:
                 tmp = tempfile.mkdtemp(prefix="issue-memory-backup-hash-")
                 os.environ["ISSUE_MEMORY_HOME"] = tmp

@@ -35,7 +35,12 @@ def _top_title(ranked: list[RankedCandidate]) -> str:
 
 def _precompute_cases(app: Any, *, limit: int = 3) -> list[CalibrationEvalCase]:
     cases: list[CalibrationEvalCase] = []
-    for raw_case in list(POSITIVE_REAL_WORLD_CASES) + list(NEGATIVE_REAL_WORLD_CASES) + list(POSITIVE_HARD_NEGATIVE_CASES) + list(NEGATIVE_HARD_NEGATIVE_CASES):
+    for raw_case in (
+        list(POSITIVE_REAL_WORLD_CASES)
+        + list(NEGATIVE_REAL_WORLD_CASES)
+        + list(POSITIVE_HARD_NEGATIVE_CASES)
+        + list(NEGATIVE_HARD_NEGATIVE_CASES)
+    ):
         profile = build_query_profile(
             error_text=raw_case.error_text,
             command=raw_case.command,
@@ -62,7 +67,11 @@ def _precompute_cases(app: Any, *, limit: int = 3) -> list[CalibrationEvalCase]:
             CalibrationEvalCase(
                 slug=raw_case.slug,
                 mode=raw_case.mode,
-                error_family=str(getattr(raw_case, "error_family", "") or profile.error_family or "unknown"),
+                error_family=str(
+                    getattr(raw_case, "error_family", "")
+                    or profile.error_family
+                    or "unknown"
+                ),
                 expected_title=expected_title,
                 safe_statuses=safe_statuses,
                 ranked=ranked,
@@ -155,9 +164,21 @@ def _search_best(cases: list[CalibrationEvalCase]) -> dict[str, Any]:
                     ambiguity_margin=ambiguity_margin,
                 )
                 if best is None or tuple(
-                    candidate[key] for key in ("objective", "negative_safety_rate", "clear_match_precision", "top1_accuracy")
+                    candidate[key]
+                    for key in (
+                        "objective",
+                        "negative_safety_rate",
+                        "clear_match_precision",
+                        "top1_accuracy",
+                    )
                 ) > tuple(
-                    best[key] for key in ("objective", "negative_safety_rate", "clear_match_precision", "top1_accuracy")
+                    best[key]
+                    for key in (
+                        "objective",
+                        "negative_safety_rate",
+                        "clear_match_precision",
+                        "top1_accuracy",
+                    )
                 ):
                     best = candidate
     assert best is not None
@@ -176,7 +197,11 @@ def run_threshold_calibration(app: Any) -> dict[str, Any]:
     for family, count in sorted(counts.items()):
         if count < 2:
             continue
-        family_cases = [case for case in cases if case.mode == "negative" or case.error_family == family]
+        family_cases = [
+            case
+            for case in cases
+            if case.mode == "negative" or case.error_family == family
+        ]
         families[family] = _search_best(family_cases)
 
     return {
@@ -247,8 +272,18 @@ def run_feedback_driven_calibration(store: Any) -> dict[str, Any]:
             "families": {},
         }
 
-    POSITIVE_TYPES = {"fix_verified", "candidate_accepted", "merge_confirmed", "split_confirmed"}
-    NEGATIVE_TYPES = {"false_positive", "candidate_rejected", "merge_rejected", "split_rejected"}
+    POSITIVE_TYPES = {
+        "fix_verified",
+        "candidate_accepted",
+        "merge_confirmed",
+        "split_confirmed",
+    }
+    NEGATIVE_TYPES = {
+        "false_positive",
+        "candidate_rejected",
+        "merge_rejected",
+        "split_rejected",
+    }
 
     family_data: dict[str, list[tuple[float, bool]]] = {}
     all_data: list[tuple[float, bool]] = []
@@ -267,7 +302,9 @@ def run_feedback_driven_calibration(store: Any) -> dict[str, Any]:
         if family:
             family_data.setdefault(family, []).append((score, is_positive))
 
-    def _find_optimal_thresholds(data: list[tuple[float, bool]]) -> dict[str, float] | None:
+    def _find_optimal_thresholds(
+        data: list[tuple[float, bool]],
+    ) -> dict[str, float] | None:
         if len(data) < 4:
             return None
         positives = [s for s, p in data if p]
@@ -294,7 +331,13 @@ def run_feedback_driven_calibration(store: Any) -> dict[str, Any]:
                 fp_rate = fp / max(len(data), 1)
                 actionable = (tp + ambiguous_pos) / max(len(positives), 1)
 
-                objective = 3.0 * recall + 2.3 * safety + 1.8 * precision + 0.5 * actionable - 3.2 * fp_rate
+                objective = (
+                    3.0 * recall
+                    + 2.3 * safety
+                    + 1.8 * precision
+                    + 0.5 * actionable
+                    - 3.2 * fp_rate
+                )
 
                 if objective > best_objective:
                     best_objective = objective

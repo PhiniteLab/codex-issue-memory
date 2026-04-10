@@ -47,7 +47,9 @@ def _expand_path_tokens(file_path: str) -> list[str]:
     expanded = list(tokenize(raw, max_tokens=12))
     if raw:
         posix = PurePosixPath(raw)
-        expanded.extend(part.lower() for part in posix.parts if part not in {"/", ".", ".."})
+        expanded.extend(
+            part.lower() for part in posix.parts if part not in {"/", ".", ".."}
+        )
         if posix.name:
             expanded.append(posix.name.lower())
     return _dedupe_preserve_order(expanded, max_tokens=16)
@@ -85,7 +87,9 @@ def build_query_profile(
         max_tokens=64,
     )
 
-    exception_source = "\n".join(part for part in [error_text, context, stack_excerpt] if part)
+    exception_source = "\n".join(
+        part for part in [error_text, context, stack_excerpt] if part
+    )
     exception_types = extract_exception_types(exception_source)
     family, root, tags, evidence = classify_from_text(normalized)
 
@@ -105,7 +109,9 @@ def build_query_profile(
         env_json=env_json,
         repo_name=repo_name,
     )
-    strategy_hints = infer_strategy_hints(error_text, context, command, file_path, stack_excerpt)
+    strategy_hints = infer_strategy_hints(
+        error_text, context, command, file_path, stack_excerpt
+    )
 
     normalized_extra_tags = [tag.strip() for tag in (extra_tags or []) if tag.strip()]
     all_tags = list(dict.fromkeys(tags + exception_types + normalized_extra_tags))
@@ -120,7 +126,8 @@ def build_query_profile(
         tags=all_tags,
         evidence=evidence,
         symptom_tokens=symptom_tokens,
-        context_tokens=context_tokens + [token for token in stack_tokens if token not in context_tokens],
+        context_tokens=context_tokens
+        + [token for token in stack_tokens if token not in context_tokens],
         command_tokens=command_tokens,
         path_tokens=path_tokens,
         stack_signature=make_stack_signature(stack_excerpt or error_text),
@@ -131,7 +138,9 @@ def build_query_profile(
             repo_name=repo_name,
             git_commit=git_commit,
         ),
-        repo_fingerprint=make_repo_fingerprint(repo_name=repo_name, git_commit=git_commit),
+        repo_fingerprint=make_repo_fingerprint(
+            repo_name=repo_name, git_commit=git_commit
+        ),
         repo_name=repo_name.strip(),
         project_scope=project_scope.strip() or "global",
         user_scope=user_scope.strip(),

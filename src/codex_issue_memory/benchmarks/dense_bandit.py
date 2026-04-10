@@ -62,7 +62,9 @@ DENSE_PARAPHRASE_CASES: list[dict[str, str]] = [
 
 def seed_dense_bandit_memory(app: Any) -> None:
     for payload in DENSE_PARAPHRASE_CASES:
-        app.issue_record_resolution(**{key: value for key, value in payload.items() if key != "query"})
+        app.issue_record_resolution(
+            **{key: value for key, value in payload.items() if key != "query"}
+        )
     app.issue_record_resolution(
         title="Requests missing in API worker",
         raw_error="ModuleNotFoundError: No module named requests while starting API worker",
@@ -142,7 +144,10 @@ def run_dense_bandit_benchmark(app: Any, *, repeats: int = 5) -> dict[str, Any]:
         repo_name="tooling-lab",
         limit=3,
     )
-    bandit_promoted = bool(second["matches"]) and int(second["matches"][0]["pattern_id"]) == second_pattern
+    bandit_promoted = (
+        bool(second["matches"])
+        and int(second["matches"][0]["pattern_id"]) == second_pattern
+    )
     bandit_reason = second["matches"][0]["why"] if second["matches"] else []
 
     return {
@@ -151,7 +156,9 @@ def run_dense_bandit_benchmark(app: Any, *, repeats: int = 5) -> dict[str, Any]:
         "latency_ms": {
             "mean": round(statistics.mean(latencies), 3) if latencies else 0.0,
             "median": round(statistics.median(latencies), 3) if latencies else 0.0,
-            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3) if latencies else 0.0,
+            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3)
+            if latencies
+            else 0.0,
             "max": round(max(latencies), 3) if latencies else 0.0,
         },
         "bandit": {

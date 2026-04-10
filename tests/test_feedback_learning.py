@@ -13,7 +13,9 @@ class FeedbackLearningTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory(prefix="issue-memory-feedback-")
         base = Path(self.temp_dir.name)
         os.environ["ISSUE_MEMORY_HOME"] = str(base / "share")
-        os.environ["ISSUE_MEMORY_DB_PATH"] = str(base / "share" / "issue_memory.sqlite3")
+        os.environ["ISSUE_MEMORY_DB_PATH"] = str(
+            base / "share" / "issue_memory.sqlite3"
+        )
         os.environ["ISSUE_MEMORY_STATE_DIR"] = str(base / "state")
         os.environ["ISSUE_MEMORY_BACKUP_DIR"] = str(base / "share" / "backups")
         os.environ["ISSUE_MEMORY_LOG_DIR"] = str(base / "state" / "log")
@@ -22,7 +24,9 @@ class FeedbackLearningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_match_logs_telemetry_and_verified_feedback_updates_variant_and_thompson_stats(self) -> None:
+    def test_match_logs_telemetry_and_verified_feedback_updates_variant_and_thompson_stats(
+        self,
+    ) -> None:
         stored = self.app.issue_record_resolution(
             title="Relative sqlite path breaks outside repo root",
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -79,8 +83,12 @@ class FeedbackLearningTests(unittest.TestCase):
 
         self.assertIsNotNone(retrieval_event)
         assert retrieval_event is not None
-        self.assertEqual(int(retrieval_event["selected_pattern_id"]), stored["pattern_id"])
-        self.assertEqual(int(retrieval_event["selected_variant_id"]), stored["variant_id"])
+        self.assertEqual(
+            int(retrieval_event["selected_pattern_id"]), stored["pattern_id"]
+        )
+        self.assertEqual(
+            int(retrieval_event["selected_variant_id"]), stored["variant_id"]
+        )
         self.assertGreaterEqual(len(candidate_rows), 1)
         self.assertEqual(str(candidate_rows[0]["candidate_type"]), "variant")
 
@@ -92,19 +100,26 @@ class FeedbackLearningTests(unittest.TestCase):
         )
         self.assertEqual(feedback["feedback_type"], "fix_verified")
         self.assertTrue(feedback["global_update_applied"])
-        self.assertGreater(feedback["variant_update"]["confidence_after"], feedback["variant_update"]["confidence_before"])
+        self.assertGreater(
+            feedback["variant_update"]["confidence_after"],
+            feedback["variant_update"]["confidence_before"],
+        )
         self.assertEqual(feedback["variant_stat_update"]["success_count"], 2)
         self.assertEqual(len(feedback["strategy_stat_updates"]), 1)
         self.assertEqual(feedback["strategy_stat_updates"][0]["scope_type"], "global")
         self.assertIsNone(feedback["learning"])
         self.assertIsNone(feedback["bandit"])
 
-        bundle = self.app.issue_get(pattern_id=stored["pattern_id"], include_examples=True, examples_limit=10)
+        bundle = self.app.issue_get(
+            pattern_id=stored["pattern_id"], include_examples=True, examples_limit=10
+        )
         self.assertEqual(bundle["variants"][0]["success_count"], 2)
         self.assertGreater(bundle["variants"][0]["confidence"], 0.78)
 
         with self.app.store.managed_connection() as conn:
-            feedback_count = conn.execute("SELECT COUNT(*) AS count FROM feedback_events").fetchone()["count"]
+            feedback_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM feedback_events"
+            ).fetchone()["count"]
 
         updated_variant_stat = self.app.store.get_variant_stat(stored["variant_id"])
         updated_strategy_stat = self.app.store.get_strategy_stat(
@@ -118,7 +133,9 @@ class FeedbackLearningTests(unittest.TestCase):
         self.assertEqual(updated_variant_stat["success_count"], 2)
         self.assertEqual(updated_strategy_stat["success_count"], 2)
 
-    def test_weak_feedback_is_session_only_and_verified_feedback_updates_global_stats(self) -> None:
+    def test_weak_feedback_is_session_only_and_verified_feedback_updates_global_stats(
+        self,
+    ) -> None:
         stored = self.app.issue_record_resolution(
             title="Relative sqlite path breaks outside repo root",
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -210,7 +227,9 @@ class FeedbackLearningTests(unittest.TestCase):
         self.assertGreaterEqual(final_match["matches"][0]["score"], score_before)
         self.assertEqual(final_match["decision"]["status"], "match")
 
-    def test_record_resolution_persists_user_scope_strategy_entities_and_seeded_stats(self) -> None:
+    def test_record_resolution_persists_user_scope_strategy_entities_and_seeded_stats(
+        self,
+    ) -> None:
         stored = self.app.issue_record_resolution(
             title="Relative sqlite path breaks outside repo root",
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -222,11 +241,15 @@ class FeedbackLearningTests(unittest.TestCase):
             file_path="services/db_loader.py",
             resolution_notes="Keep the path anchored to __file__ to avoid cwd drift.",
         )
-        bundle = self.app.issue_get(pattern_id=stored["pattern_id"], include_examples=True, examples_limit=5)
+        bundle = self.app.issue_get(
+            pattern_id=stored["pattern_id"], include_examples=True, examples_limit=5
+        )
         self.assertEqual(bundle["variants"][0]["strategy_key"], "resolve_from___file__")
         self.assertEqual(bundle["episodes"][0]["user_scope"], "mehmet")
         self.assertIn("missing_path", bundle["variants"][0]["entity_slots_json"])
-        self.assertIn("resolve_from___file__", bundle["variants"][0]["strategy_hints_json"])
+        self.assertIn(
+            "resolve_from___file__", bundle["variants"][0]["strategy_hints_json"]
+        )
 
         global_strategy = self.app.store.get_strategy_stat(
             scope_type="global",
@@ -249,7 +272,9 @@ class FeedbackLearningTests(unittest.TestCase):
         self.assertEqual(user_strategy["success_count"], 1)
         self.assertEqual(variant_stat["success_count"], 1)
 
-    def test_false_positive_updates_negative_applicability_and_failure_stats(self) -> None:
+    def test_false_positive_updates_negative_applicability_and_failure_stats(
+        self,
+    ) -> None:
         stored = self.app.issue_record_resolution(
             title="Relative sqlite path breaks outside repo root",
             raw_error="FileNotFoundError: references/contractsDatabase.sqlite3",
@@ -281,7 +306,9 @@ class FeedbackLearningTests(unittest.TestCase):
         self.assertTrue(feedback["negative_applicability_applied"])
         self.assertEqual(feedback["variant_stat_update"]["failure_count"], 1)
 
-        bundle = self.app.issue_get(pattern_id=stored["pattern_id"], include_examples=True, examples_limit=5)
+        bundle = self.app.issue_get(
+            pattern_id=stored["pattern_id"], include_examples=True, examples_limit=5
+        )
         negative_applicability = bundle["variants"][0]["negative_applicability_json"]
         self.assertEqual(negative_applicability["false_positive_count"], 1)
         self.assertIn("repo-alpha", negative_applicability["repo_names"])

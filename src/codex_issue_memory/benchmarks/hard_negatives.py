@@ -133,7 +133,9 @@ def seed_hard_negative_memory(app: Any) -> None:
     seed_dense_bandit_memory(app)
 
 
-def run_hard_negative_benchmark(app: Any, *, repeats: int = 1, limit: int = 3) -> dict[str, Any]:
+def run_hard_negative_benchmark(
+    app: Any, *, repeats: int = 1, limit: int = 3
+) -> dict[str, Any]:
     latencies: list[float] = []
     failures: list[dict[str, Any]] = []
     positive_total = 0
@@ -155,43 +157,61 @@ def run_hard_negative_benchmark(app: Any, *, repeats: int = 1, limit: int = 3) -
             )
             latencies.append((time.perf_counter() - start) * 1000.0)
             status = str(result["decision"]["status"])
-            top_title = str(result["matches"][0]["title"]) if result.get("matches") else ""
+            top_title = (
+                str(result["matches"][0]["title"]) if result.get("matches") else ""
+            )
             if case.mode == "positive":
                 positive_total += 1
-                if top_title == case.expected_title and status in {"match", "ambiguous"}:
+                if top_title == case.expected_title and status in {
+                    "match",
+                    "ambiguous",
+                }:
                     positive_top1 += 1
                 else:
-                    failures.append({
-                        "slug": case.slug,
-                        "mode": case.mode,
-                        "expected_title": case.expected_title,
-                        "status": status,
-                        "top_title": top_title,
-                    })
+                    failures.append(
+                        {
+                            "slug": case.slug,
+                            "mode": case.mode,
+                            "expected_title": case.expected_title,
+                            "status": status,
+                            "top_title": top_title,
+                        }
+                    )
             else:
                 negative_total += 1
-                safe_statuses = {str(case.expected_status), "abstain" if case.expected_status == "ambiguous" else str(case.expected_status)}
+                safe_statuses = {
+                    str(case.expected_status),
+                    "abstain"
+                    if case.expected_status == "ambiguous"
+                    else str(case.expected_status),
+                }
                 if status in safe_statuses:
                     negative_safe += 1
                 else:
                     unsafe_clear_matches += 1 if status == "match" else 0
-                    failures.append({
-                        "slug": case.slug,
-                        "mode": case.mode,
-                        "expected_status": case.expected_status,
-                        "status": status,
-                        "top_title": top_title,
-                    })
+                    failures.append(
+                        {
+                            "slug": case.slug,
+                            "mode": case.mode,
+                            "expected_status": case.expected_status,
+                            "status": status,
+                            "top_title": top_title,
+                        }
+                    )
 
     return {
         "dataset": "hard_negatives",
         "positive_top1_accuracy": round(positive_top1 / max(positive_total, 1), 4),
         "negative_safety_rate": round(negative_safe / max(negative_total, 1), 4),
-        "unsafe_clear_match_rate": round(unsafe_clear_matches / max(negative_total, 1), 4),
+        "unsafe_clear_match_rate": round(
+            unsafe_clear_matches / max(negative_total, 1), 4
+        ),
         "latency_ms": {
             "mean": round(statistics.mean(latencies), 3) if latencies else 0.0,
             "median": round(statistics.median(latencies), 3) if latencies else 0.0,
-            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3) if latencies else 0.0,
+            "p95": round(sorted(latencies)[max(int(len(latencies) * 0.95) - 1, 0)], 3)
+            if latencies
+            else 0.0,
         },
         "failures": failures[:20],
     }
