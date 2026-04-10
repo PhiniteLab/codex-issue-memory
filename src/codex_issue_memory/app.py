@@ -17,8 +17,8 @@ class IssueMemoryApp:
         self.matcher = IssueMatcher(self.store, settings=self.store.settings)
         self.session_service = SessionService(self.store)
         self.record_service = RecordResolutionService(self.store, self.matcher)
-        self.feedback_service = FeedbackService(self.store, self.session_service)
         self.preference_service = PreferenceService(self.store)
+        self.feedback_service = FeedbackService(self.store, self.session_service, self.preference_service)
         self.guardrail_service = GuardrailService(self.store, self.matcher)
 
     def issue_match(
@@ -77,7 +77,62 @@ class IssueMemoryApp:
             "decision": decision.to_dict(),
             "retrieval_event_id": event_meta.get("event_id"),
             "matches": [match.to_compact_dict() for match in matches],
+            "reasoning": self._build_reasoning(event_meta.get("_ranked", [])),
             "next_action": next_action,
+        }
+
+    @staticmethod
+    def _build_reasoning(ranked: list[Any]) -> dict[str, Any]:
+        """Extract structured reasoning from ranked candidates for transparency (Phase 2.4)."""
+        if not ranked:
+            return {"top_signals": [], "session_memory": {}, "strategy_bandit": {}}
+
+        top = ranked[0]
+        features = getattr(top, "features", {}) or {}
+        reasons = getattr(top, "reasons", []) or []
+
+        # Top contributing signals: features sorted by absolute weighted contribution
+        signal_entries = []
+        for name, value in features.items():
+            if name.startswith("_") or name in ("base_score", "strategy_bandit_final_score"):
+                continue
+            if abs(value) > 1e-6:
+                signal_entries.append((abs(value), f"{name} ({value:+.3f})"))
+        signal_entries.sort(reverse=True)
+        top_signals = [entry[1] for entry in signal_entries[:7]]
+
+        # Session memory info
+        session_info: dict[str, Any] = {}
+        session_penalty = features.get("session_penalty", 0.0) or features.get("session_penalty_score", 0.0)
+        session_boost = features.get("session_boost", 0.0)
+        if session_penalty:
+            session_info["penalty"] = round(float(session_penalty), 4)
+        if session_boost:
+            session_info["boost"] = round(float(session_boost), 4)
+        session_reasons = [r for r in reasons if "session" in r.lower() or "rejected" in r.lower()]
+        if session_reasons:
+            session_info["reasons"] = session_reasons
+
+        # Strategy bandit info
+        bandit_info: dict[str, Any] = {}
+        bandit_adj = features.get("strategy_bandit_adjustment", 0.0)
+        if abs(bandit_adj) > 1e-6:
+            bandit_info["adjustment"] = round(float(bandit_adj), 4)
+        if features.get("strategy_bandit_shadow_mode"):
+            bandit_info["shadow_mode"] = True
+            if features.get("strategy_bandit_shadow_promoted"):
+                bandit_info["shadow_promoted"] = True
+        neg_penalty = features.get("negative_applicability_penalty", 0.0)
+        if neg_penalty:
+            bandit_info["negative_applicability_penalty"] = round(float(neg_penalty), 4)
+        bandit_reasons = [r for r in reasons if "bandit" in r.lower() or "strategy" in r.lower() or "negative-applicability" in r.lower()]
+        if bandit_reasons:
+            bandit_info["reasons"] = bandit_reasons
+
+        return {
+            "top_signals": top_signals,
+            "session_memory": session_info,
+            "strategy_bandit": bandit_info,
         }
 
     def issue_record_resolution(

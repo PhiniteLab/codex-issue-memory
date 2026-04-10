@@ -2402,7 +2402,22 @@ class IssueMemoryStore:
                 value = {}
             raw_variant_id = value.get("variant_id")
             variant_id = int(raw_variant_id) if raw_variant_id not in (None, "") else None
-            salience = min(max(float(row.get("salience", 0.0)), 0.0), 1.0)
+            raw_salience = min(max(float(row.get("salience", 0.0)), 0.0), 1.0)
+
+            # Intra-session decay: salience decays with age (Phase 2.2)
+            updated_at = str(row.get("updated_at", ""))
+            decay_half_life = float(self.settings.session_decay_half_life_minutes) if self.settings else 30.0
+            if updated_at:
+                try:
+                    row_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                    if row_dt.tzinfo is None:
+                        row_dt = row_dt.replace(tzinfo=timezone.utc)
+                    aged_minutes = max((datetime.now(timezone.utc) - row_dt).total_seconds() / 60.0, 0.0)
+                    salience = raw_salience * (0.5 ** (aged_minutes / decay_half_life))
+                except (ValueError, TypeError):
+                    salience = raw_salience
+            else:
+                salience = raw_salience
 
             parts = key.split(":")
             if len(parts) < 2:
@@ -3078,6 +3093,105 @@ class IssueMemoryStore:
             'variant_stat_update': variant_update,
             'strategy_stat_updates': strategy_updates,
         }
+
+    # ------------------------------------------------------------------
+    # Phase 2.1: Implicit rejection detection helpers
+    # ------------------------------------------------------------------
+
+    def mark_retrieval_has_feedback(self, retrieval_event_id: int) -> None:
+        """Set has_feedback = 1 on a retrieval event after any explicit feedback."""
+        with self.managed_connection() as conn:
+            conn.execute(
+                "UPDATE retrieval_events SET has_feedback = 1 WHERE id = ?",
+                (retrieval_event_id,),
+            )
+
+    def sweep_implicit_rejections(
+        self,
+        timeout_minutes: int | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Find retrieval events without feedback older than *timeout_minutes* and record implicit_ignore feedback."""
+        from .services.feedback_service import DEFAULT_REWARDS
+
+        effective_timeout = timeout_minutes if timeout_minutes is not None else int(self.settings.implicit_feedback_timeout_minutes)
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=effective_timeout)).replace(microsecond=0).isoformat()
+        with self.managed_connection() as conn:
+            rows = [
+                dict(r) for r in conn.execute(
+                    """
+                    SELECT re.id AS retrieval_event_id, rc.id AS retrieval_candidate_id,
+                           rc.pattern_id, rc.variant_id
+                    FROM retrieval_events re
+                    JOIN retrieval_candidates rc ON rc.retrieval_event_id = re.id
+                    WHERE re.has_feedback = 0
+                      AND re.created_at < ?
+                      AND rc.candidate_rank = 1
+                    ORDER BY re.created_at ASC
+                    LIMIT ?
+                    """,
+                    (cutoff, limit),
+                ).fetchall()
+            ]
+            results = []
+            now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            reward = DEFAULT_REWARDS.get("implicit_ignore", -0.10)
+            for row in rows:
+                conn.execute(
+                    """
+                    INSERT INTO feedback_events
+                        (retrieval_event_id, retrieval_candidate_id, pattern_id, variant_id,
+                         episode_id, feedback_type, reward, actor, notes, created_at)
+                    VALUES (?, ?, ?, ?, NULL, 'implicit_ignore', ?, 'system', 'auto-sweep', ?)
+                    """,
+                    (
+                        row["retrieval_event_id"],
+                        row["retrieval_candidate_id"],
+                        row.get("pattern_id"),
+                        row.get("variant_id"),
+                        reward,
+                        now_iso,
+                    ),
+                )
+                conn.execute(
+                    "UPDATE retrieval_events SET has_feedback = 1 WHERE id = ?",
+                    (row["retrieval_event_id"],),
+                )
+                results.append({
+                    "retrieval_event_id": row["retrieval_event_id"],
+                    "pattern_id": row.get("pattern_id"),
+                    "variant_id": row.get("variant_id"),
+                    "reward": reward,
+                })
+            return results
+
+    # ------------------------------------------------------------------
+    # Phase 2.3: Cross-session rejection stats
+    # ------------------------------------------------------------------
+
+    def increment_rejection_stat(
+        self,
+        user_scope: str,
+        pattern_id: int,
+        variant_id: int = 0,
+    ) -> int:
+        """Increment the rejection counter and return the new count."""
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self.managed_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO user_rejection_stats (user_scope, pattern_id, variant_id, rejection_count, last_rejected_at)
+                VALUES (?, ?, ?, 1, ?)
+                ON CONFLICT(user_scope, pattern_id, variant_id)
+                DO UPDATE SET rejection_count = rejection_count + 1, last_rejected_at = excluded.last_rejected_at
+                """,
+                (user_scope, pattern_id, variant_id, now_iso),
+            )
+            row = conn.execute(
+                "SELECT rejection_count FROM user_rejection_stats WHERE user_scope = ? AND pattern_id = ? AND variant_id = ?",
+                (user_scope, pattern_id, variant_id),
+            ).fetchone()
+            return int(row["rejection_count"]) if row else 1
 
     def submit_feedback(
         self,

@@ -99,9 +99,9 @@ class IssueMatcher:
         visible_matches = [self._to_match_result(item) for item in visible_ranked]
         latency_ms = int((time.perf_counter() - start) * 1000)
 
-        event_meta: dict[str, Any] = {}
+        event_meta: dict[str, Any] = {"_ranked": visible_ranked}
         if log_event and self.settings.telemetry_enabled:
-            event_meta = self.store.log_retrieval_event(
+            event_meta.update(self.store.log_retrieval_event(
                 profile=profile,
                 ranked=ranked,
                 decision=decision,
@@ -110,7 +110,7 @@ class IssueMatcher:
                 repo_name=repo_name,
                 retrieval_mode=retrieval_mode,
                 latency_ms=latency_ms,
-            )
+            ))
             ids_by_rank = {
                 int(rank): int(candidate_id)
                 for rank, candidate_id in event_meta.get("candidate_ids_by_rank", {}).items()

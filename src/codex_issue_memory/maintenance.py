@@ -620,6 +620,17 @@ def cmd_analyze_feature_importance() -> None:
     print(json.dumps({"status": "ok", "feature_count": len(stats), "stats": stats}, indent=2, default=str))
 
 
+def cmd_sweep_implicit(timeout_minutes: int | None, limit: int) -> None:
+    """Sweep retrieval events without feedback as implicit_ignore (Phase 2.1)."""
+    store = IssueMemoryStore.from_env()
+    store.initialize()
+    results = store.sweep_implicit_rejections(
+        timeout_minutes=timeout_minutes,
+        limit=limit,
+    )
+    print(json.dumps({"status": "ok", "swept": len(results), "events": results}, indent=2, default=str))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Maintenance commands for codex issue memory.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -676,6 +687,9 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--format", choices=("json", "html"), default="json")
     dashboard.add_argument("--window-days", type=int, default=30)
     subparsers.add_parser("analyze-feature-importance")
+    sweep_impl = subparsers.add_parser("sweep-implicit")
+    sweep_impl.add_argument("--timeout-minutes", type=int, default=None)
+    sweep_impl.add_argument("--limit", type=int, default=500)
     return parser
 
 
@@ -737,6 +751,8 @@ def main() -> None:
         cmd_export_dashboard(output=args.output, fmt=args.format, window_days=args.window_days)
     elif args.command == "analyze-feature-importance":
         cmd_analyze_feature_importance()
+    elif args.command == "sweep-implicit":
+        cmd_sweep_implicit(timeout_minutes=args.timeout_minutes, limit=args.limit)
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 

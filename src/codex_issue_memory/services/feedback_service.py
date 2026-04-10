@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any
 
 from ..storage import IssueMemoryStore, WEAK_FEEDBACK_WEIGHTS
 from .session_service import SessionService
 
+if TYPE_CHECKING:
+    from .preference_service import PreferenceService
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_REWARDS: dict[str, float] = {
     "candidate_accepted": 0.35,
@@ -15,6 +20,7 @@ DEFAULT_REWARDS: dict[str, float] = {
     "merge_rejected": -0.40,
     "split_confirmed": 0.40,
     "split_rejected": -0.40,
+    "implicit_ignore": -0.10,
 }
 
 POSITIVE_FEEDBACK = {"candidate_accepted", "fix_verified", "merge_confirmed", "split_confirmed"}
@@ -26,9 +32,15 @@ LEARNABLE_FEEDBACK = GLOBAL_LEARNING_FEEDBACK | set(WEAK_FEEDBACK_WEIGHTS)
 class FeedbackService:
     """Turn retrieval feedback into telemetry, short-term memory and strategy updates."""
 
-    def __init__(self, store: IssueMemoryStore, session_service: SessionService) -> None:
+    def __init__(
+        self,
+        store: IssueMemoryStore,
+        session_service: SessionService,
+        preference_service: PreferenceService | None = None,
+    ) -> None:
         self.store = store
         self.session_service = session_service
+        self.preference_service = preference_service
 
     def submit(
         self,
@@ -61,6 +73,8 @@ class FeedbackService:
             )
 
         applied_reward = DEFAULT_REWARDS.get(feedback_type, 0.0) if reward is None else float(reward)
+        # Mark the retrieval event as having received feedback (Phase 2.1)
+        self.store.mark_retrieval_has_feedback(retrieval_event_id)
         feedback_result = self.store.submit_feedback(
             retrieval_event_id=retrieval_event_id,
             retrieval_candidate_id=int(candidate["id"]),
@@ -97,6 +111,20 @@ class FeedbackService:
             )
 
         learning = None
+
+        # Cross-session preference learning (Phase 2.3)
+        auto_rule = None
+        if (
+            feedback_type in NEGATIVE_FEEDBACK
+            and self.store.settings.enable_cross_session_learning
+            and self.preference_service is not None
+            and candidate.get("pattern_id") is not None
+        ):
+            auto_rule = self._try_auto_rejection_rule(
+                event=event,
+                pattern_id=int(candidate["pattern_id"]),
+                variant_id=int(candidate["variant_id"]) if candidate.get("variant_id") is not None else 0,
+            )
 
         bandit_update = None
         if self.store.settings.enable_strategy_bandit and feedback_type in LEARNABLE_FEEDBACK:
@@ -142,4 +170,43 @@ class FeedbackService:
             "learning": learning,
             "bandit": bandit_update,
             "feature_log_count": feature_log_count,
+            "auto_rejection_rule": auto_rule,
         }
+
+    def _try_auto_rejection_rule(
+        self,
+        event: dict[str, Any],
+        pattern_id: int,
+        variant_id: int,
+    ) -> dict[str, Any] | None:
+        """Increment rejection stats; auto-create an 'avoid' preference rule after threshold."""
+        user_scope = str(event.get("user_scope", "") or self.store.settings.default_user_scope or "")
+        count = self.store.increment_rejection_stat(
+            user_scope=user_scope,
+            pattern_id=pattern_id,
+            variant_id=variant_id,
+        )
+        threshold = self.store.settings.auto_rejection_threshold
+        if count < threshold or self.preference_service is None:
+            return None
+        if count > threshold:
+            return None  # only fire once at exact threshold
+        try:
+            pattern_bundle = self.store.get_pattern(pattern_id)
+            title = str(pattern_bundle.pattern["title"]) if pattern_bundle else f"pattern-{pattern_id}"
+            instruction = f"Auto-avoid: pattern '{title}' rejected {count} times across sessions"
+            result = self.preference_service.set_rule(
+                instruction=instruction,
+                project_scope=str(event.get("project_scope", "global")),
+                user_scope=user_scope,
+                repo_name=str(event.get("repo_name", "")),
+                error_family=str(event.get("error_family", "")),
+                mode="avoid",
+                weight=0.18,
+                source="cross_session_learning",
+            )
+            logger.info("Auto-rejection rule created for pattern %d (count=%d)", pattern_id, count)
+            return result
+        except Exception:
+            logger.warning("Failed to create auto-rejection rule for pattern %d", pattern_id, exc_info=True)
+            return None

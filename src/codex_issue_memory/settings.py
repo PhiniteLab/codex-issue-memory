@@ -48,6 +48,10 @@ class Settings:
     resolved_review_retention_days: int
     enable_redaction: bool
     enable_calibration_profile: bool
+    session_decay_half_life_minutes: float
+    implicit_feedback_timeout_minutes: int
+    enable_cross_session_learning: bool
+    auto_rejection_threshold: int
     max_mcp_instances: int | None
     server_lock_dir: Path
     server_duplicate_exit_code: int
@@ -210,6 +214,10 @@ class Settings:
             resolved_review_retention_days=max(int(os.environ.get("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", "120")), 1),
             enable_redaction=os.environ.get("ISSUE_MEMORY_ENABLE_REDACTION", "1").strip().lower() not in {"0", "false", "no"},
             enable_calibration_profile=os.environ.get("ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE", "1").strip().lower() not in {"0", "false", "no"},
+            session_decay_half_life_minutes=max(float(os.environ.get("ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES", "30.0")), 1.0),
+            implicit_feedback_timeout_minutes=max(int(os.environ.get("ISSUE_MEMORY_IMPLICIT_FEEDBACK_TIMEOUT_MINUTES", "30")), 5),
+            enable_cross_session_learning=os.environ.get("ISSUE_MEMORY_ENABLE_CROSS_SESSION_LEARNING", "0").strip().lower() not in {"0", "false", "no"},
+            auto_rejection_threshold=max(int(os.environ.get("ISSUE_MEMORY_AUTO_REJECTION_THRESHOLD", "3")), 2),
             max_mcp_instances=max_mcp_instances,
             server_lock_dir=server_lock_dir,
             server_duplicate_exit_code=duplicate_exit_code,
