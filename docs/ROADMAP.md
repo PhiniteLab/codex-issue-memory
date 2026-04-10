@@ -128,11 +128,11 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 ---
 
-## Faz 2 — Sessiz Geri Bildirim ve Session Zekası  *(orta öncelik)*
+## Faz 2 — Sessiz Geri Bildirim ve Session Zekası  *(tamamlandı ✅)*
 
 > Explicit feedback olmadan bile öğrenme.
 
-### 2.1 Örtük reddetme tespiti (implicit rejection)
+### 2.1 Örtük reddetme tespiti (implicit rejection) ✅
 
 **Sorun:** Kullanıcı `issue_match` çağırıp sonucu görmezden gelirse (feedback yok) bu "sessiz reddetme" yapıyor. Şu anda bu sinyal tamamen kayıp.
 
@@ -146,7 +146,7 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 **Dosyalar:** `storage.py` (yeni kolon), `services/feedback_service.py`, `app.py`
 
-### 2.2 Session-içi bellek bozunması (intra-session decay)
+### 2.2 Session-içi bellek bozunması (intra-session decay) ✅
 
 **Sorun:** Session memory'de 2 saat önceki reddetme ile 2 dakika önceki reddetme aynı ağırlıkta.
 
@@ -160,7 +160,7 @@ def session_penalty(aged_minutes: float, base_salience: float) -> float:
 
 **Dosyalar:** `services/session_service.py` (veya ilgili session penalty kodu)
 
-### 2.3 Çapraz-session tercih öğrenme
+### 2.3 Çapraz-session tercih öğrenme ✅
 
 **Sorun:** Session A'da reddedilen pattern, Session B'de yeniden önerilir. Kullanıcı her seferinde reddeder.
 
@@ -173,7 +173,7 @@ def session_penalty(aged_minutes: float, base_salience: float) -> float:
 
 **Dosyalar:** `storage.py` (yeni tablo), `services/feedback_service.py`, `services/preference_service.py`
 
-### 2.4 Match yanıtında karar açıklamaları
+### 2.4 Match yanıtında karar açıklamaları ✅
 
 **Sorun:** Kullanıcı neden bu öneriyi aldığını (veya almadığını) bilmiyor.
 
@@ -195,9 +195,9 @@ def session_penalty(aged_minutes: float, base_salience: float) -> float:
 
 ---
 
-## Faz 3 — Gelişmiş Öğrenme Altyapısı  *(uzun vadeli)*
+## Faz 3 — Gelişmiş Öğrenme Altyapısı  *(tamamlandı ✅)*
 
-### 3.1 Multi-faktör posterior'lar
+### 3.1 Multi-faktör posterior’lar ✅
 
 **Sorun:** Mevcut posterior tek boyutlu: `(success, trials)`. Başarı oranı yüksek ama FP oranı da yüksek bir strateji aynı görünüyor.
 
@@ -211,7 +211,7 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 **Dosyalar:** `learning/posteriors.py`, `learning/strategy_bandit.py`, `storage.py`
 
-### 3.2 Strateji ailesi hiyerarşisi
+### 3.2 Strateji ailesi hiyerarşisi ✅
 
 **Sorun:** Bireysel stratejiler bağımsız öğreniyor. `install_missing_dependency` ve `fix_version_conflict` aslında aynı ailenin (bağımlılık yönetimi) üyeleri.
 
@@ -222,7 +222,7 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 **Dosyalar:** `learning/strategy_bandit.py`, `normalization/class_hints.py`, `storage.py`
 
-### 3.3 A/B test çerçevesi
+### 3.3 A/B test çerçevesi ✅
 
 **Sorun:** Yeni ranking ağırlıkları veya eşik değişikliklerini güvenli şekilde doğrulamanın yolu yok.
 
@@ -234,7 +234,7 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 **Dosyalar:** `storage.py`, `app.py`, `retrieval/ranker.py`, `maintenance.py`
 
-### 3.4 Otomatik ağırlık kalibrasyonu
+### 3.4 Otomatik ağırlık kalibrasyonu ✅
 
 **Sorun:** 23 ranking ağırlığı deneysel; hiç kalibrasyon yok.
 
@@ -249,9 +249,9 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 ---
 
-## Faz 4 — Retrieval Kalitesi  *(sürekli iyileştirme)*
+## Faz 4 — Retrieval Kalitesi  *(tamamlandı ✅)*
 
-### 4.1 IDF-bazlı token önceliklendirme
+### 4.1 IDF-bazlı token önceliklendirme ✅
 
 **Sorun:** FTS sorgusunda tüm tokenlar eşit ağırlıkta. `error`, `the`, `in` gibi sık kelimeler gerçek diagnostik tokenları (`OutOfMemoryError`, `CUDA`) bastırıyor.
 
@@ -262,7 +262,7 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 **Dosyalar:** `retrieval/candidate_retriever.py`, `storage.py`
 
-### 4.2 Eş anlamlı genişletme
+### 4.2 Eş anlamlı genişletme ✅
 
 **Sorun:** `missing dependency` vs `import error` vs `module not found` — semantik olarak aynı hatalar, farklı n-gram'lar.
 
@@ -273,7 +273,7 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 **Dosyalar:** `normalization/` (yeni modül), `retrieval/dense_index.py`
 
-### 4.3 Entity slot öğrenme
+### 4.3 Entity slot öğrenme ✅
 
 **Sorun:** Entity conflict penalty'si statik (-0.18). Ancak bazı entity çakışmaları önemsiz (farklı config sürümleri), bazıları kritik (farklı dtype).
 
@@ -286,9 +286,9 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
 
 ---
 
-## Faz 5 — Operasyonel Olgunluk  *(devam eden)*
+## Faz 5 — Operasyonel Olgunluk  *(tamamlandı ✅)*
 
-### 5.1 Strateji bazında metrikler
+### 5.1 Strateji bazında metrikler ✅
 
 - `issue_metrics()` yanıtına strateji bazında istatistikler ekle:
   ```json
@@ -302,17 +302,17 @@ Nihai strateji skoru: `quality × safety × adoption^0.5`
   }
   ```
 
-### 5.2 Gecikme (latency) dokümanı
+### 5.2 Gecikme (latency) dokümanı ✅
 
 - Her pipeline aşamasında zamanlama: retrieval, ranking, bandit, decision
 - `issue_metrics`'e latency breakdown ekle
 
-### 5.3 Degradasyon alarmı
+### 5.3 Degradasyon alarmı ✅
 
 - FP oranı %30+ arttığında `issue_metrics` uyarı flag'i döndürsün
 - `doctor` komutu FP trend analizi yapsın
 
-### 5.4 Batch learning güvenlik kapısı
+### 5.4 Batch learning güvenlik kapısı ✅
 
 - Anlık feedback güncelleme yerine 5-dakikalık batch window
 - Aynı pattern için 5+ FP gelirse otomatik review queue'ye al

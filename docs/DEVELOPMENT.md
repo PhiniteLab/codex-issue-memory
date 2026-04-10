@@ -173,6 +173,6 @@ Please include:
 - how you validated it
 - any remaining risks or follow-up work
 
-For live launcher validation of parent/subagent MCP reuse, keep the separate orchestration checklist up to date: [`ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md).
+For live launcher validation of parent/subagent MCP reuse, keep the separate orchestration checklist up to date: [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md).
 
 For the broader project contribution guide, see [`../CONTRIBUTING.md`](../CONTRIBUTING.md).

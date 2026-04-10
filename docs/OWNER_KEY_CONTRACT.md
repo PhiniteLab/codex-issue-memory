@@ -86,4 +86,4 @@ conversation-owned MCP.
 For a production-ready verification flow, use:
 
 - repo-side proof: `issue-memory-maint e2e-mcp-reuse-harness --json`
-- orchestration proof: [`ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md)
+- orchestration proof: [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md)

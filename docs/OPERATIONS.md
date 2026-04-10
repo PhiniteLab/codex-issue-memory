@@ -163,7 +163,7 @@ Duplicate launch behavior is expected when:
 - the resolved owner key already has a live slot
 - the launch exits through duplicate rejection with the configured owner-key exit code (`75` by default)
 
-For the separate live launcher procedure that tries to prove real shared stdio reuse, see [`ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md).
+For the separate live launcher procedure that tries to prove real shared stdio reuse, see [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md).
 
 ## Retention and cleanup
 

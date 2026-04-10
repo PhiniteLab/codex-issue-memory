@@ -324,8 +324,8 @@ grep -n 'ISSUE_MEMORY_MAX_MCP_INSTANCES = "0"' ~/.codex/config.toml
   - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
   - [`docs/USAGE.md`](docs/USAGE.md)
   - [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
-  - [`docs/CODEX_MAIN_CONVERSATION_OWNERSHIP.md`](docs/CODEX_MAIN_CONVERSATION_OWNERSHIP.md)
-  - [`docs/ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](docs/ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md)
+  - [`docs/OWNER_KEY_CONTRACT.md`](docs/OWNER_KEY_CONTRACT.md)
+  - [`docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md)
   - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
   - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
   - [`docs/ROADMAP.md`](docs/ROADMAP.md)
@@ -337,14 +337,15 @@ See [`docs/README.md`](docs/README.md) for the full documentation index and reco
 ## Repository layout
 
 ```text
-src/codex_issue_memory/   MCP runtime and app logic
-scripts/                  install, registration, cron, and verification helpers
-docs/                     public documentation
-templates/                reference snippets and plugin-wrapper examples
-skills/                   bundled reference content
-tests/                    regression and benchmark coverage
-.codex-plugin/            local/custom plugin metadata
-.mcp.json                 wrapper server templates (remote + local command)
+src/codex_issue_memory/            MCP runtime and app logic
+scripts/                           install, registration, cron, and verification helpers
+docs/                              public documentation
+templates/                         reference snippets and plugin-wrapper examples
+skills/                            bundled reference content
+tests/                             regression and benchmark coverage
+reports_lifecycle_investigation/    historical lifecycle debugging reports
+.codex-plugin/                     local/custom plugin metadata
+.mcp.json                          wrapper server templates (remote + local command)
 ```
 
 ## Contributing

@@ -67,7 +67,7 @@ The format is intentionally simple and human-readable.
 - public-facing community files for contributing, support, and security reporting
 - repository-tracked `RELEASE_NOTES.md` for versioned GitHub release text
 - GitHub Actions release workflow for publishing the current version and release notes on push to `main`
-- release-critical documentation for conversation-owner lifecycle and stdio reuse (`CODEX_MAIN_CONVERSATION_OWNERSHIP.md`, `ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`)
+- release-critical documentation for conversation-owner lifecycle and stdio reuse (`OWNER_KEY_CONTRACT.md`, `ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`)
 - documentation coverage for maintenance CLI operations including status payloads, benchmark suites, review queue workflows, and doctor/recommended-config checks
 - full maintenance-command surface documentation (26 subcommands), including schema/bootstrap, backups, health diagnostics, review, runtime snapshots, and calibration/benchmark workflows
 - lifecycle/operator docs for process slots and owner-key metadata (`running`, `active_count`, `active_slots`, `assigned_slot`, `status_path`, `lock_path`, `owner_key`, `owner_role`, `owner_key_env`)

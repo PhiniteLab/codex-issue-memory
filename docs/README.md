@@ -17,7 +17,7 @@ For public users, read the documentation with these rules in mind:
 
 - [`INSTALLATION.md`](INSTALLATION.md): setup, verification, manual registration, and path guidance
 - [`CONFIGURATION.md`](CONFIGURATION.md): runtime variables, defaults, and public configuration model
-- [`CODEX_MAIN_CONVERSATION_OWNERSHIP.md`](CODEX_MAIN_CONVERSATION_OWNERSHIP.md): owner-key contract for one MCP per main Codex conversation
+- [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md): owner-key contract for one MCP per main Codex conversation
 - [`USAGE.md`](USAGE.md): MCP tools, direct Python usage, preferences, guardrails, metrics, and CLI commands
 - [`OPERATIONS.md`](OPERATIONS.md): backups, restore, logs, health checks, and troubleshooting
 - [`ROLLOUT.md`](ROLLOUT.md): recommended default runtime posture and alternative configuration choices
@@ -29,7 +29,7 @@ For public users, read the documentation with these rules in mind:
 
 ### Additional references
 
-- [`ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md): live launcher checklist for proving true stdio reuse
+- [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md): live launcher checklist for proving true stdio reuse
 
 ### Release-critical order for publication
 
@@ -37,7 +37,7 @@ For public release readers:
 
 1. [`INSTALLATION.md`](INSTALLATION.md)
 2. [`CONFIGURATION.md`](CONFIGURATION.md)
-3. [`CODEX_MAIN_CONVERSATION_OWNERSHIP.md`](CODEX_MAIN_CONVERSATION_OWNERSHIP.md)
+3. [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md)
 4. [`USAGE.md`](USAGE.md)
 5. [`OPERATIONS.md`](OPERATIONS.md)
 6. [`ROLLOUT.md`](ROLLOUT.md)
@@ -46,7 +46,7 @@ For public release readers:
 
 1. Read the root [`README.md`](../README.md) for the project overview.
 2. Use [`INSTALLATION.md`](INSTALLATION.md) and [`CONFIGURATION.md`](CONFIGURATION.md) to get a correct live setup.
-3. Read [`CODEX_MAIN_CONVERSATION_OWNERSHIP.md`](CODEX_MAIN_CONVERSATION_OWNERSHIP.md) to understand the owner-key contract.
+3. Read [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md) to understand the owner-key contract.
 4. Use [`USAGE.md`](USAGE.md) and [`OPERATIONS.md`](OPERATIONS.md) for day-to-day usage.
 5. Use [`ROLLOUT.md`](ROLLOUT.md) to choose a configuration posture.
 6. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DEVELOPMENT.md`](DEVELOPMENT.md) before changing code.

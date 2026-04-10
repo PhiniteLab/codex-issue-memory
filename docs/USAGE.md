@@ -392,7 +392,7 @@ For owner-key-aware deployments, `issue-memory` exposes controlled stdio reuse t
 
 Use this behavior in combination with the orchestration checklist:
 
-- repo-side: [`ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDLIO_REUSE_CHECKLIST.md) (entrypoint verification)
+- repo-side: [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md) (entrypoint verification)
 - duplicate exit handling: treat exit `75` as a reuse signal, not a startup failure
 
 ## Server status and slot visibility
