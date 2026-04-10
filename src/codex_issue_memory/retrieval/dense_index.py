@@ -48,6 +48,12 @@ class DenseEmbeddingIndex:
                     self._add(vector, f"tri:{token[start:start + 3]}", 0.35)
         for left, right in zip(tokens, tokens[1:]):
             self._add(vector, f"bi:{left}_{right}", 0.50)
+        # Synonym vector augmentation: add cross-pair hashes
+        from ..normalization.synonyms import synonym_pairs_for
+
+        for token in tokens:
+            for tok, syn in synonym_pairs_for(token):
+                self._add(vector, f"syn:{tok}_{syn}", 0.30)
         norm = math.sqrt(sum(value * value for value in vector))
         if norm <= 1e-9:
             return vector

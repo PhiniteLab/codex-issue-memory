@@ -154,6 +154,7 @@ def build_candidate_features(
     candidate: dict[str, Any],
     *,
     project_scope: str,
+    entity_importance: dict[str, float] | None = None,
 ) -> tuple[dict[str, float], list[str]]:
     reasons: list[str] = []
 
@@ -276,6 +277,16 @@ def build_candidate_features(
     entity_signals = compare_entity_slots(profile.entity_slots, entity_slots)
     entity_match_score = float(entity_signals.get("match_score", 0.0))
     entity_conflict_penalty_score = float(entity_signals.get("conflict_penalty", 0.0))
+
+    # Phase 4.3: Scale entity scores by learned importance weights
+    if entity_importance:
+        involved_keys = list(entity_signals.get("matched_keys", [])) + list(entity_signals.get("conflict_keys", []))
+        if involved_keys:
+            weights = [entity_importance.get(k, 1.0) for k in involved_keys]
+            avg_weight = sum(weights) / len(weights)
+            entity_match_score *= avg_weight
+            entity_conflict_penalty_score *= avg_weight
+
     for reason in entity_signals.get("reasons", []):
         if reason not in reasons:
             reasons.append(str(reason))

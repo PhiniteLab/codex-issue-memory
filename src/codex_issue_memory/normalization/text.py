@@ -45,8 +45,12 @@ def normalize_text(text: str) -> str:
     return text
 
 
-def tokenize(text: str, max_tokens: int = 64) -> list[str]:
-    """Tokenize text after normalization, preserving order while deduplicating."""
+def tokenize(text: str, max_tokens: int = 64, *, expand_syns: bool = True) -> list[str]:
+    """Tokenize text after normalization, preserving order while deduplicating.
+
+    When *expand_syns* is True (default), known technical synonyms are
+    appended after the primary tokens to boost recall.
+    """
     if not text:
         return []
 
@@ -67,6 +71,11 @@ def tokenize(text: str, max_tokens: int = 64) -> list[str]:
         seen.add(token)
         if len(deduped) >= max_tokens:
             break
+
+    if expand_syns:
+        from .synonyms import expand_synonyms
+        deduped = expand_synonyms(deduped)[:max_tokens]
+
     return deduped
 
 

@@ -30,7 +30,11 @@ class CandidateRetriever:
             return default
 
     @staticmethod
-    def make_fts_query(profile: QueryProfile) -> str:
+    def make_fts_query(
+        profile: QueryProfile,
+        *,
+        idf_scores: dict[str, float] | None = None,
+    ) -> str:
         parts = (
             profile.exception_types
             + profile.symptom_tokens[:8]
@@ -47,8 +51,12 @@ class CandidateRetriever:
                 continue
             clean.append(token)
             seen.add(token)
-            if len(clean) >= 14:
-                break
+
+        # IDF-based prioritization: sort by descending IDF, take top 20
+        if idf_scores:
+            default_idf = 0.0
+            clean.sort(key=lambda t: idf_scores.get(t, default_idf), reverse=True)
+        clean = clean[:20]
         return " OR ".join(clean)
 
     @classmethod
@@ -111,7 +119,21 @@ class CandidateRetriever:
         session_id: str = "",
         repo_name: str = "",
     ) -> list[dict[str, object]]:
-        fts_query = self.make_fts_query(profile)
+        # Gather candidate tokens for IDF lookup
+        candidate_tokens = list(dict.fromkeys(
+            re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_")
+            for t in (
+                profile.exception_types
+                + profile.symptom_tokens[:8]
+                + profile.context_tokens[:8]
+                + profile.command_tokens[:4]
+                + profile.path_tokens[:4]
+                + profile.tokens[:8]
+            )
+            if len(re.sub(r"[^a-z0-9_]+", "_", str(t).strip().lower()).strip("_")) >= 2
+        ))
+        idf_scores = self.store.query_token_idf(candidate_tokens) if candidate_tokens else {}
+        fts_query = self.make_fts_query(profile, idf_scores=idf_scores)
         merged: dict[tuple[int, int | None], dict[str, object]] = {}
 
         lexical_candidates = self.store.variant_candidates(

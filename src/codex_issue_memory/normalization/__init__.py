@@ -18,6 +18,7 @@ from .fingerprints import (
 from .query_profile import build_query_profile
 from .strategies import derive_strategy_key, infer_strategy_hints
 from .signatures import build_symptom_cluster, make_pattern_key, make_variant_key
+from .synonyms import SYNONYM_MAP, expand_synonyms, synonym_pairs_for
 from .text import (
     STOPWORDS,
     canonicalize_exception_name,
@@ -56,5 +57,8 @@ __all__ = [
     'make_variant_key',
     'normalize_text',
     'parse_tag_string',
+    'synonym_pairs_for',
+    'SYNONYM_MAP',
+    'expand_synonyms',
     'tokenize',
 ]

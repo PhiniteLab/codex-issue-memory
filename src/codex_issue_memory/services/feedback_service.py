@@ -148,6 +148,13 @@ class FeedbackService:
                 project_scope=str(event.get("project_scope", "global")),
             )
 
+        # Phase 4.3: Update entity importance from feedback
+        self._update_entity_importance_from_feedback(
+            candidate=candidate,
+            error_family=str(event.get("error_family", "")),
+            is_positive=feedback_type in POSITIVE_FEEDBACK,
+        )
+
         return {
             "status": "ok",
             "retrieval_event_id": retrieval_event_id,
@@ -210,3 +217,38 @@ class FeedbackService:
         except Exception:
             logger.warning("Failed to create auto-rejection rule for pattern %d", pattern_id, exc_info=True)
             return None
+
+    def _update_entity_importance_from_feedback(
+        self,
+        candidate: dict[str, Any],
+        error_family: str,
+        is_positive: bool,
+    ) -> None:
+        """Track entity key participation in positive/negative feedback for importance learning."""
+        feature_json = candidate.get("feature_json")
+        if not isinstance(feature_json, dict):
+            return
+
+        # Extract entity signals from candidate reasons
+        reasons = candidate.get("reason_json")
+        if not isinstance(reasons, list):
+            return
+
+        for reason in reasons:
+            reason_str = str(reason)
+            if reason_str.startswith("entity-match:"):
+                key = reason_str.split(":", 1)[1]
+                self.store.update_entity_importance(
+                    entity_key=key,
+                    error_family=error_family,
+                    is_match=True,
+                    is_positive_outcome=is_positive,
+                )
+            elif reason_str.startswith("entity-conflict:"):
+                key = reason_str.split(":", 1)[1]
+                self.store.update_entity_importance(
+                    entity_key=key,
+                    error_family=error_family,
+                    is_match=False,
+                    is_positive_outcome=is_positive,
+                )

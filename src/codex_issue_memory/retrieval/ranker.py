@@ -144,7 +144,20 @@ class HeuristicRanker:
         preference_rules: list[dict[str, Any]] | None = None,
         error_family: str = "",
     ) -> RankedCandidate:
-        features, reasons = build_candidate_features(profile, candidate, project_scope=project_scope)
+        # Phase 4.3: Fetch entity importance weights from store
+        ei_weights: dict[str, float] | None = None
+        if self.store is not None and error_family:
+            variant = candidate.get("best_variant") or {}
+            raw_entity_slots = variant.get("entity_slots_json") if isinstance(variant, dict) else {}
+            entity_slots = raw_entity_slots if isinstance(raw_entity_slots, dict) else {}
+            all_keys = list(set(list(profile.entity_slots.keys()) + list(entity_slots.keys())))
+            if all_keys:
+                ei_weights = self.store.query_entity_importance(error_family, all_keys)
+
+        features, reasons = build_candidate_features(
+            profile, candidate, project_scope=project_scope,
+            entity_importance=ei_weights if ei_weights else None,
+        )
         weights = self._weights_for_family(error_family) if error_family else self.DEFAULT_WEIGHTS
         base_total = 0.0
         for name, weight in weights.items():

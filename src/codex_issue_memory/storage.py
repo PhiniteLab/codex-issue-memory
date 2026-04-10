@@ -3633,6 +3633,151 @@ class IssueMemoryStore:
             return {"samples": [], "feature_names": feature_names, "skipped": True, "reason": f"only {len(samples)} samples (need {min_samples})"}
         return {"samples": samples, "feature_names": feature_names}
 
+    # ------------------------------------------------------------------
+    # Phase 4: IDF token stats
+    # ------------------------------------------------------------------
+
+    def rebuild_token_idf(self) -> int:
+        """Recompute IDF scores from issue_patterns + issue_variants FTS content.
+
+        IDF = log(total_docs / doc_count).  We treat each pattern/variant as one
+        document and count how many contain each token.
+        """
+        import math as _math
+
+        now = utc_now_iso()
+        with self.managed_connection(immediate=True) as conn:
+            # Gather text from patterns and variants
+            pattern_rows = conn.execute(
+                "SELECT title || ' ' || canonical_symptom || ' ' || COALESCE(tags, '') AS txt FROM issue_patterns"
+            ).fetchall()
+            variant_rows = conn.execute(
+                "SELECT search_text AS txt FROM issue_variants WHERE search_text != ''"
+            ).fetchall()
+            all_docs = [str(r["txt"]) for r in pattern_rows] + [str(r["txt"]) for r in variant_rows]
+            total_docs = max(len(all_docs), 1)
+
+            token_doc_count: dict[str, int] = {}
+            for doc in all_docs:
+                seen: set[str] = set()
+                for word in doc.lower().split():
+                    clean = word.strip("_.,;:!?()[]{}\"'")
+                    if len(clean) >= 2 and clean not in seen:
+                        seen.add(clean)
+                        token_doc_count[clean] = token_doc_count.get(clean, 0) + 1
+
+            conn.execute("DELETE FROM token_idf")
+            rows = [
+                (token, count, round(_math.log(total_docs / count), 4), now)
+                for token, count in token_doc_count.items()
+            ]
+            conn.executemany(
+                "INSERT INTO token_idf(token, doc_count, idf_score, updated_at) VALUES (?, ?, ?, ?)",
+                rows,
+            )
+            return len(rows)
+
+    def query_token_idf(self, tokens: list[str]) -> dict[str, float]:
+        """Return {token: idf_score} for the requested tokens."""
+        if not tokens:
+            return {}
+        with self.managed_connection() as conn:
+            placeholders = ", ".join("?" for _ in tokens)
+            rows = conn.execute(
+                f"SELECT token, idf_score FROM token_idf WHERE token IN ({placeholders})",
+                tokens,
+            ).fetchall()
+            return {str(r["token"]): float(r["idf_score"]) for r in rows}
+
+    # ------------------------------------------------------------------
+    # Phase 4: Entity importance learning
+    # ------------------------------------------------------------------
+
+    def query_entity_importance(
+        self, error_family: str, entity_keys: list[str],
+    ) -> dict[str, float]:
+        """Return {entity_key: importance_weight} for requested keys within an error family."""
+        if not entity_keys:
+            return {}
+        with self.managed_connection() as conn:
+            placeholders = ", ".join("?" for _ in entity_keys)
+            rows = conn.execute(
+                f"""
+                SELECT entity_key, importance_weight
+                FROM entity_importance
+                WHERE error_family IN (?, '') AND entity_key IN ({placeholders})
+                ORDER BY
+                    CASE WHEN error_family = ? THEN 0 ELSE 1 END
+                """,
+                [error_family] + entity_keys + [error_family],
+            ).fetchall()
+            result: dict[str, float] = {}
+            for r in rows:
+                key = str(r["entity_key"])
+                if key not in result:
+                    result[key] = float(r["importance_weight"])
+            return result
+
+    def update_entity_importance(
+        self,
+        entity_key: str,
+        error_family: str,
+        *,
+        is_match: bool,
+        is_positive_outcome: bool,
+    ) -> None:
+        """Increment entity importance counters and recalculate importance weight."""
+        now = utc_now_iso()
+        with self.managed_connection(immediate=True) as conn:
+            conn.execute(
+                """
+                INSERT INTO entity_importance(entity_key, error_family,
+                    importance_weight, match_count, conflict_count,
+                    positive_outcome_count, negative_outcome_count, updated_at)
+                VALUES (?, ?, 1.0, 0, 0, 0, 0, ?)
+                ON CONFLICT(entity_key, error_family) DO NOTHING
+                """,
+                (entity_key, error_family, now),
+            )
+
+            if is_match:
+                col_inc = "match_count"
+            else:
+                col_inc = "conflict_count"
+            outcome_col = "positive_outcome_count" if is_positive_outcome else "negative_outcome_count"
+
+            conn.execute(
+                f"""
+                UPDATE entity_importance
+                SET {col_inc} = {col_inc} + 1,
+                    {outcome_col} = {outcome_col} + 1,
+                    updated_at = ?
+                WHERE entity_key = ? AND error_family = ?
+                """,
+                (now, entity_key, error_family),
+            )
+
+            # Recalculate weight: positive_rate boosted by match evidence
+            row = conn.execute(
+                """
+                SELECT match_count, conflict_count,
+                       positive_outcome_count, negative_outcome_count
+                FROM entity_importance
+                WHERE entity_key = ? AND error_family = ?
+                """,
+                (entity_key, error_family),
+            ).fetchone()
+            if row:
+                total = int(row["positive_outcome_count"]) + int(row["negative_outcome_count"])
+                if total >= 3:
+                    positive_rate = int(row["positive_outcome_count"]) / total
+                    weight = 0.5 + 0.5 * (2.0 * positive_rate - 1.0)
+                    weight = max(0.1, min(2.0, weight))
+                    conn.execute(
+                        "UPDATE entity_importance SET importance_weight = ?, updated_at = ? WHERE entity_key = ? AND error_family = ?",
+                        (round(weight, 4), now, entity_key, error_family),
+                    )
+
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 1.0) -> float:
         return min(max(float(value), low), high)
