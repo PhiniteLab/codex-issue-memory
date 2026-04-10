@@ -1074,6 +1074,29 @@ class IssueMemoryStore:
             updated = conn.execute("SELECT * FROM review_queue WHERE id = ?", (review_id,)).fetchone()
             return self._decode_review_row(updated) if updated is not None else None
 
+    def query_repo_feedback_velocity(self, repo_name: str, *, window_days: int = 30, baseline_rate: float = 3.0) -> float:
+        """Compute feedback velocity multiplier for a repo.
+
+        Returns repo_velocity_multiplier = feedback_count_last_N_days / baseline_rate.
+        Clamped to [0.5, 3.0] to prevent extreme decay adjustments.
+        """
+        if not repo_name.strip():
+            return 1.0
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(window_days, 1))).replace(microsecond=0).isoformat()
+        with self.managed_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM feedback_events fe
+                JOIN retrieval_events re ON fe.retrieval_event_id = re.id
+                WHERE re.repo_name = ? AND fe.created_at >= ?
+                """,
+                (repo_name.strip(), cutoff),
+            ).fetchone()
+        count = int(row["cnt"]) if row is not None else 0
+        raw_multiplier = count / max(baseline_rate, 0.1)
+        return max(0.5, min(raw_multiplier, 3.0))
+
     def metrics_summary(self, *, window_days: int = 30) -> dict[str, Any]:
         window = max(int(window_days), 1)
         cutoff = (datetime.now(timezone.utc) - timedelta(days=window)).replace(microsecond=0).isoformat()

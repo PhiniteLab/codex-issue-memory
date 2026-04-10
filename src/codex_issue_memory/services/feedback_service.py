@@ -10,7 +10,7 @@ DEFAULT_REWARDS: dict[str, float] = {
     "candidate_accepted": 0.35,
     "candidate_rejected": -0.60,
     "fix_verified": 1.00,
-    "false_positive": -1.00,
+    "false_positive": -2.50,
     "merge_confirmed": 0.40,
     "merge_rejected": -0.40,
     "split_confirmed": 0.40,

@@ -50,6 +50,17 @@ class HeuristicRanker:
     def __init__(self, store: IssueMemoryStore | None = None, settings: Settings | None = None) -> None:
         self.store = store
         self.settings = settings
+        self._weight_overrides: dict[str, dict[str, float]] = {}
+        if store is not None and settings is not None and settings.enable_calibration_profile:
+            profile = store.load_calibration_profile()
+            raw_overrides = profile.get("weight_overrides") if isinstance(profile, dict) else None
+            if isinstance(raw_overrides, dict):
+                for family, overrides in raw_overrides.items():
+                    if isinstance(overrides, dict):
+                        self._weight_overrides[str(family)] = {
+                            str(k): float(v) for k, v in overrides.items()
+                            if str(k) in self.DEFAULT_WEIGHTS
+                        }
         strategy_bandit_active = store is not None and settings is not None and settings.enable_strategy_bandit
         self.strategy_bandit = (
             StrategyThompsonBandit(store, settings)
@@ -65,6 +76,15 @@ class HeuristicRanker:
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 0.999) -> float:
         return min(max(float(value), low), high)
+
+    def _weights_for_family(self, error_family: str) -> dict[str, float]:
+        """Return merged weights: DEFAULT_WEIGHTS overridden by family-specific calibration."""
+        overrides = self._weight_overrides.get(error_family)
+        if not overrides:
+            return self.DEFAULT_WEIGHTS
+        merged = dict(self.DEFAULT_WEIGHTS)
+        merged.update(overrides)
+        return merged
 
     @staticmethod
     def _candidate_key(item: RankedCandidate) -> str:
@@ -122,10 +142,12 @@ class HeuristicRanker:
         *,
         project_scope: str,
         preference_rules: list[dict[str, Any]] | None = None,
+        error_family: str = "",
     ) -> RankedCandidate:
         features, reasons = build_candidate_features(profile, candidate, project_scope=project_scope)
+        weights = self._weights_for_family(error_family) if error_family else self.DEFAULT_WEIGHTS
         base_total = 0.0
-        for name, weight in self.DEFAULT_WEIGHTS.items():
+        for name, weight in weights.items():
             base_total += weight * features.get(name, 0.0)
 
         preference_adjustment, preference_reasons = self._preference_adjustment(profile, candidate, preference_rules)
@@ -274,12 +296,14 @@ class HeuristicRanker:
             if self.store is not None and self.settings is not None and self.settings.enable_preference_rules
             else []
         )
+        error_family = getattr(profile, "error_family", "") or ""
         ranked = [
                 self.score(
                     profile,
                     candidate,
                     project_scope=project_scope,
                     preference_rules=preference_rules,
+                    error_family=error_family,
                 )
             for candidate in candidates
         ]

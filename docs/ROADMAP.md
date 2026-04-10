@@ -63,11 +63,11 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 ---
 
-## Faz 1 — Bağlama Duyarlı Öğrenme  *(yüksek öncelik)*
+## Faz 1 — Bağlama Duyarlı Öğrenme  *(tamamlandı ✅)*
 
 > Tekil global eşik/ağırlık yerine hata ailesi ve repo bazında farklılaşma.
 
-### 1.1 Hata ailesi bazında eşik kalibrasyonu
+### 1.1 Hata ailesi bazında eşik kalibrasyonu ✅
 
 **Sorun:** `match_accept_threshold=0.68`, `match_weak_threshold=0.40`, `ambiguity_margin=0.09` tüm hata aileleri için aynı. `import_error` için yüksek güvenilirlik (0.75+) gerekli iken `generic_runtime_error` için 0.60 yeterli olabilir.
 
@@ -88,7 +88,7 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 **Dosyalar:** `retrieval/decision.py`, `matching.py`, `maintenance.py`, `calibration_profile.json`
 
-### 1.2 Bağlamsal yarı-ömür (contextual half-life)
+### 1.2 Bağlamsal yarı-ömür (contextual half-life) ✅
 
 **Sorun:** Tüm stratejilerin posterior'ları aynı hızda bozunuyor (`strategy_half_life_days=75`). Aktif repo'lardaki stratejiler daha yavaş, nadir repo'lar daha hızlı bozunmalı.
 
@@ -101,7 +101,7 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 **Dosyalar:** `learning/posteriors.py`, `storage.py` (velocity hesabı)
 
-### 1.3 Hata ailesi bazında ranking ağırlıkları
+### 1.3 Hata ailesi bazında ranking ağırlıkları ✅
 
 **Sorun:** 23 ranking ağırlığı tüm hata aileleri için aynı. `tensor_dtype_error` için `dense_score` daha önemli olmalı; `import_error` için `lexical_score` daha belirleyici.
 
@@ -114,7 +114,7 @@ Bu yol haritası dört temel ekseni hedefliyor:
 
 **Dosyalar:** `retrieval/ranker.py`, `retrieval/features.py`
 
-### 1.4 FP maliyetini asimetrik ağırlıklandır
+### 1.4 FP maliyetini asimetrik ağırlıklandır ✅
 
 **Sorun:** `false_positive` ve basit `rejection` posteriora eşit ağırlıkla giriyor. Ancak FP'nin maliyeti çok daha yüksek (kullanıcı güvenini sarsar, zaman kaybettirir).
 

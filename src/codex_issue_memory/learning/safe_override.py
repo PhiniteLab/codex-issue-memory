@@ -5,6 +5,8 @@ from typing import Any
 
 from ..settings import Settings
 
+FP_SAFETY_BLOCK_THRESHOLD = 2
+
 
 @dataclass(slots=True)
 class SafeOverrideResult:
@@ -96,6 +98,17 @@ class SafeOverridePolicy:
                 margin=conservative_margin,
                 evidence=evidence,
             )
+        fp_count = self._candidate_fp_count(best_key, analyses)
+        if fp_count >= FP_SAFETY_BLOCK_THRESHOLD:
+            return SafeOverrideResult(
+                chosen_key=baseline_key,
+                promoted=False,
+                baseline_key=baseline_key,
+                promoted_key=None,
+                reason="fp-safety-block",
+                margin=conservative_margin,
+                evidence=evidence,
+            )
         return SafeOverrideResult(
             chosen_key=best_key,
             promoted=True,
@@ -106,5 +119,13 @@ class SafeOverridePolicy:
             evidence=evidence,
         )
 
+    @staticmethod
+    def _candidate_fp_count(candidate_key: str, analyses: dict[str, Any]) -> int:
+        """Extract false_positive_count from the candidate's bandit analysis."""
+        analysis = analyses.get(candidate_key)
+        if analysis is None:
+            return 0
+        return int(getattr(analysis, "fp_count", 0))
 
-__all__ = ["SafeOverridePolicy", "SafeOverrideResult"]
+
+__all__ = ["FP_SAFETY_BLOCK_THRESHOLD", "SafeOverridePolicy", "SafeOverrideResult"]

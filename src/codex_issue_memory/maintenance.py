@@ -24,6 +24,7 @@ from .benchmarks import (
     run_real_world_eval,
     run_runtime_diagnostics,
     run_threshold_calibration,
+    run_feedback_driven_calibration,
     run_user_domain_benchmark,
     seed_dense_bandit_memory,
     seed_hard_negative_memory,
@@ -544,7 +545,19 @@ def cmd_benchmark_merge_stress() -> None:
     print(json.dumps(_persist_report("benchmark_merge_correctness_stress", _with_temp_issue_memory(runner)), indent=2, ensure_ascii=False))
 
 
-def cmd_calibrate_thresholds(write_profile: bool) -> None:
+def cmd_calibrate_thresholds(write_profile: bool, from_feedback: bool = False) -> None:
+    if from_feedback:
+        store = IssueMemoryStore.from_env()
+        store.initialize()
+        report = run_feedback_driven_calibration(store)
+        report = _persist_report("threshold_calibration_feedback", report)
+        if write_profile and report.get("global"):
+            profile_payload = {key: report[key] for key in ("version", "generated_at", "global", "families", "metrics") if key in report}
+            store.settings.calibration_profile_path.write_text(json.dumps(profile_payload, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+            report["calibration_profile_path"] = str(store.settings.calibration_profile_path)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
     def runner(app: IssueMemoryApp) -> dict[str, Any]:
         seed_real_world_memory(app)
         return run_threshold_calibration(app)
@@ -657,6 +670,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("benchmark-merge-stress")
     calibrate = subparsers.add_parser("calibrate-thresholds")
     calibrate.add_argument("--write-profile", action="store_true")
+    calibrate.add_argument("--from-feedback", action="store_true", help="Use real feedback data instead of benchmark cases")
     dashboard = subparsers.add_parser("export-dashboard")
     dashboard.add_argument("--output", required=True)
     dashboard.add_argument("--format", choices=("json", "html"), default="json")
@@ -718,7 +732,7 @@ def main() -> None:
     elif args.command == "benchmark-merge-stress":
         cmd_benchmark_merge_stress()
     elif args.command == "calibrate-thresholds":
-        cmd_calibrate_thresholds(write_profile=bool(args.write_profile))
+        cmd_calibrate_thresholds(write_profile=bool(args.write_profile), from_feedback=bool(args.from_feedback))
     elif args.command == "export-dashboard":
         cmd_export_dashboard(output=args.output, fmt=args.format, window_days=args.window_days)
     elif args.command == "analyze-feature-importance":

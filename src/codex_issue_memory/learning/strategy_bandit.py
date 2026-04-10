@@ -35,6 +35,7 @@ class StrategyBanditOutcome:
     variant_std: float
     effective_evidence: float
     negative_penalty: float
+    fp_count: int
     adjustment: float
     final_score: float
     conservative_score: float
@@ -83,6 +84,7 @@ class StrategyThompsonBandit:
         prior_beta: float,
         half_life_days: int,
         seed_parts: tuple[Any, ...],
+        velocity_multiplier: float = 1.0,
     ) -> BetaPosterior:
         alpha = float(row.get("alpha", prior_alpha)) if row is not None else float(prior_alpha)
         beta = float(row.get("beta", prior_beta)) if row is not None else float(prior_beta)
@@ -95,6 +97,7 @@ class StrategyThompsonBandit:
             prior_alpha=prior_alpha,
             prior_beta=prior_beta,
             seed_parts=seed_parts,
+            velocity_multiplier=velocity_multiplier,
         )
 
     def _combined_strategy_signal(
@@ -135,11 +138,12 @@ class StrategyThompsonBandit:
         normalized = value.strip().lower()
         return normalized in {str(item).strip().lower() for item in items if str(item).strip()}
 
-    def _negative_applicability_penalty(self, profile: QueryProfile, variant: dict[str, Any]) -> tuple[float, list[str]]:
+    def _negative_applicability_penalty(self, profile: QueryProfile, variant: dict[str, Any]) -> tuple[float, list[str], int]:
         payload = variant.get("negative_applicability_json")
         if not isinstance(payload, dict) or not payload:
-            return 0.0, []
-        penalty = min(float(payload.get("false_positive_count", 0)) * 0.03, 0.15)
+            return 0.0, [], 0
+        fp_count = int(payload.get("false_positive_count", 0))
+        penalty = min(float(fp_count) * 0.03, 0.15)
         reasons: list[str] = []
         if self._match_any(profile.project_scope, payload.get("project_scopes")):
             penalty += 0.08
@@ -158,7 +162,7 @@ class StrategyThompsonBandit:
         if path_value and self._match_any(path_value, payload.get("file_paths")):
             penalty += 0.05
             reasons.append("negative-applicability-file-path")
-        return min(penalty, 0.30), reasons
+        return min(penalty, 0.30), reasons, fp_count
 
     def score_candidates(
         self,
@@ -190,6 +194,8 @@ class StrategyThompsonBandit:
             user_scope=profile.user_scope,
         )
 
+        velocity = self.store.query_repo_feedback_velocity(profile.repo_name)
+
         results: dict[str, StrategyBanditOutcome] = {}
         for item in ranked_items:
             candidate = item.candidate
@@ -214,6 +220,7 @@ class StrategyThompsonBandit:
                 prior_beta=STRATEGY_PRIOR_BETA,
                 half_life_days=self.settings.strategy_half_life_days,
                 seed_parts=seed_base + ("global",),
+                velocity_multiplier=velocity,
             )
             repo_posterior = self._load_posterior(
                 snapshot.get("repo", {}).get(strategy_key),
@@ -221,6 +228,7 @@ class StrategyThompsonBandit:
                 prior_beta=STRATEGY_PRIOR_BETA,
                 half_life_days=self.settings.strategy_half_life_days,
                 seed_parts=seed_base + ("repo", profile.repo_name),
+                velocity_multiplier=velocity,
             )
             user_posterior = self._load_posterior(
                 snapshot.get("user", {}).get(strategy_key),
@@ -228,6 +236,7 @@ class StrategyThompsonBandit:
                 prior_beta=STRATEGY_PRIOR_BETA,
                 half_life_days=self.settings.strategy_half_life_days,
                 seed_parts=seed_base + ("user", profile.user_scope),
+                velocity_multiplier=velocity,
             )
             variant_posterior = self._load_posterior(
                 snapshot.get("variants", {}).get(variant_id),
@@ -235,6 +244,7 @@ class StrategyThompsonBandit:
                 prior_beta=VARIANT_PRIOR_BETA,
                 half_life_days=self.settings.variant_half_life_days,
                 seed_parts=seed_base + ("variant",),
+                velocity_multiplier=velocity,
             )
 
             strategy_mean, strategy_sample, strategy_std = self._combined_strategy_signal(
@@ -255,7 +265,7 @@ class StrategyThompsonBandit:
                 )
             variant_signal = 0.65 * variant_posterior.mean + 0.35 * variant_posterior.sample
 
-            negative_penalty, negative_reasons = self._negative_applicability_penalty(profile, variant)
+            negative_penalty, negative_reasons, fp_count = self._negative_applicability_penalty(profile, variant)
 
             effective_evidence = strategy_effective + 0.5 * variant_posterior.effective_observations
             evidence_scale = min(
@@ -307,6 +317,7 @@ class StrategyThompsonBandit:
                 variant_std=variant_posterior.std,
                 effective_evidence=effective_evidence,
                 negative_penalty=negative_penalty,
+                fp_count=fp_count,
                 adjustment=adjustment,
                 final_score=final_score,
                 conservative_score=conservative_score,

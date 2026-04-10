@@ -209,4 +209,117 @@ def run_threshold_calibration(app: Any) -> dict[str, Any]:
     }
 
 
-__all__ = ["run_threshold_calibration"]
+__all__ = ["run_threshold_calibration", "run_feedback_driven_calibration"]
+
+
+def run_feedback_driven_calibration(store: Any) -> dict[str, Any]:
+    """Compute optimal per-family thresholds from real feedback_events data.
+
+    Uses the correlation between scores and feedback outcomes (accepted/verified vs rejected/FP)
+    to find the threshold that best separates positive and negative outcomes per error family.
+    """
+    from ..storage import IssueMemoryStore
+
+    if not isinstance(store, IssueMemoryStore):
+        return {"status": "error", "message": "Invalid store"}
+
+    with store.managed_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                re.error_family,
+                rc.total_score,
+                fe.feedback_type,
+                fe.reward
+            FROM feedback_events fe
+            JOIN retrieval_events re ON fe.retrieval_event_id = re.id
+            JOIN retrieval_candidates rc ON fe.retrieval_candidate_id = rc.id
+            WHERE rc.total_score IS NOT NULL AND re.error_family != ''
+            ORDER BY re.error_family
+            """,
+        ).fetchall()
+
+    if not rows:
+        return {
+            "status": "ok",
+            "message": "No feedback data available for calibration.",
+            "global": {},
+            "families": {},
+        }
+
+    POSITIVE_TYPES = {"fix_verified", "candidate_accepted", "merge_confirmed", "split_confirmed"}
+    NEGATIVE_TYPES = {"false_positive", "candidate_rejected", "merge_rejected", "split_rejected"}
+
+    family_data: dict[str, list[tuple[float, bool]]] = {}
+    all_data: list[tuple[float, bool]] = []
+
+    for row in rows:
+        feedback_type = str(row["feedback_type"])
+        score = float(row["total_score"])
+        if feedback_type in POSITIVE_TYPES:
+            is_positive = True
+        elif feedback_type in NEGATIVE_TYPES:
+            is_positive = False
+        else:
+            continue
+        family = str(row["error_family"]).strip()
+        all_data.append((score, is_positive))
+        if family:
+            family_data.setdefault(family, []).append((score, is_positive))
+
+    def _find_optimal_thresholds(data: list[tuple[float, bool]]) -> dict[str, float] | None:
+        if len(data) < 4:
+            return None
+        positives = [s for s, p in data if p]
+        negatives = [s for s, p in data if not p]
+        if not positives or not negatives:
+            return None
+
+        best_objective = -999.0
+        best_thresholds: dict[str, float] | None = None
+
+        for accept_t in _GRID_ACCEPT:
+            for weak_t in _GRID_WEAK:
+                if weak_t >= accept_t:
+                    continue
+                tp = sum(1 for s in positives if s >= accept_t)
+                fn = sum(1 for s in positives if s < weak_t)
+                ambiguous_pos = len(positives) - tp - fn
+                fp = sum(1 for s in negatives if s >= accept_t)
+                tn = sum(1 for s in negatives if s < weak_t)
+
+                precision = tp / max(tp + fp, 1)
+                recall = tp / max(len(positives), 1)
+                safety = tn / max(len(negatives), 1)
+                fp_rate = fp / max(len(data), 1)
+                actionable = (tp + ambiguous_pos) / max(len(positives), 1)
+
+                objective = 3.0 * recall + 2.3 * safety + 1.8 * precision + 0.5 * actionable - 3.2 * fp_rate
+
+                if objective > best_objective:
+                    best_objective = objective
+                    best_thresholds = {
+                        "accept_threshold": round(accept_t, 4),
+                        "weak_threshold": round(weak_t, 4),
+                    }
+
+        return best_thresholds
+
+    global_result = _find_optimal_thresholds(all_data) or {}
+    families_result: dict[str, dict[str, float]] = {}
+    for family, fdata in sorted(family_data.items()):
+        result = _find_optimal_thresholds(fdata)
+        if result:
+            families_result[family] = result
+
+    return {
+        "version": 1,
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "source": "feedback_driven",
+        "global": global_result,
+        "families": families_result,
+        "metrics": {
+            "total_feedback_rows": len(all_data),
+            "family_count": len(families_result),
+        },
+    }

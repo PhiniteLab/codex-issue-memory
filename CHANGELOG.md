@@ -8,6 +8,11 @@ The format is intentionally simple and human-readable.
 
 ### Added
 
+- **Phase 1.1 — Family-specific thresholds**: `run_feedback_driven_calibration()` in `benchmarks/calibration.py` computes per-family accept/weak thresholds from real feedback data using grid search; `calibrate-thresholds --from-feedback` CLI flag; results include global and per-family optimal thresholds
+- **Phase 1.2 — Contextual half-life**: `velocity_multiplier` parameter in `decay_beta_parameters()` and `build_beta_posterior()` adjusts effective half-life based on repo feedback velocity; `query_repo_feedback_velocity()` in storage computes feedback count / baseline_rate (clamped 0.5–3.0); strategy bandit passes velocity through all posterior computations
+- **Phase 1.3 — Family-specific ranking weights**: `HeuristicRanker` loads `weight_overrides` from `calibration_profile.json` at initialization; `_weights_for_family()` merges default weights with per-family overrides; `score()` accepts `error_family` parameter; `rank()` extracts error_family from QueryProfile
+- **Phase 1.4 — Asymmetric FP cost**: `false_positive` reward changed from −1.0 to −2.5; `FP_SAFETY_BLOCK_THRESHOLD=2` constant in `safe_override.py`; `_candidate_fp_count()` method and FP safety gate in `SafeOverridePolicy.choose()`; `fp_count` field on `StrategyBanditOutcome`
+- `tests/test_phase1_improvements.py`: 27 tests covering all Phase 1 items (6 FP cost, 7 half-life, 4 calibration, 8 weights, 1 bandit, 1 CLI)
 - **Phase 0.1 — Feedback loop closure**: weak feedback types (`candidate_accepted`, `candidate_rejected`, `merge_confirmed`, `merge_rejected`, `split_confirmed`, `split_rejected`) now update variant statistics with fractional weights (0.25–0.40), closing ~60% of previously lost feedback signal
 - **Phase 0.2 — `proven_score` feature**: new Laplace-smoothed ranking feature `(success+1)/(used+2)` with weight 0.08; `support_score` weight raised from 0.02 to 0.05; "proven-variant" reason tag
 - **Phase 0.3 — Feature-outcome log**: new `feature_outcome_log` table (migration 010), `log_feature_outcomes()` / `query_feature_outcome_stats()` storage methods, automatic feature-outcome logging in feedback pipeline, `analyze-feature-importance` CLI command

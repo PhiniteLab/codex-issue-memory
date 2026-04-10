@@ -64,6 +64,7 @@ def decay_beta_parameters(
     half_life_days: int,
     prior_alpha: float,
     prior_beta: float,
+    velocity_multiplier: float = 1.0,
 ) -> tuple[float, float, float]:
     if half_life_days <= 0:
         return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
@@ -73,7 +74,8 @@ def decay_beta_parameters(
     age_days = max((datetime.now(timezone.utc) - updated_dt).total_seconds() / 86400.0, 0.0)
     if age_days <= 0.0:
         return max(alpha, prior_alpha), max(beta, prior_beta), 1.0
-    decay = 0.5 ** (age_days / float(half_life_days))
+    effective_half_life = float(half_life_days) * max(float(velocity_multiplier), 0.1)
+    decay = 0.5 ** (age_days / effective_half_life)
     decayed_alpha = prior_alpha + max(alpha - prior_alpha, 0.0) * decay
     decayed_beta = prior_beta + max(beta - prior_beta, 0.0) * decay
     return decayed_alpha, decayed_beta, decay
@@ -95,6 +97,7 @@ def build_beta_posterior(
     prior_alpha: float,
     prior_beta: float,
     seed_parts: tuple[Any, ...],
+    velocity_multiplier: float = 1.0,
 ) -> BetaPosterior:
     decayed_alpha, decayed_beta, decay = decay_beta_parameters(
         alpha=float(alpha),
@@ -103,6 +106,7 @@ def build_beta_posterior(
         half_life_days=half_life_days,
         prior_alpha=prior_alpha,
         prior_beta=prior_beta,
+        velocity_multiplier=velocity_multiplier,
     )
     rng = deterministic_rng(*seed_parts)
     sample = rng.betavariate(max(decayed_alpha, 1e-6), max(decayed_beta, 1e-6))

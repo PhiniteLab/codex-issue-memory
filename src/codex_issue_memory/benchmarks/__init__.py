@@ -1,4 +1,4 @@
-from .calibration import run_threshold_calibration
+from .calibration import run_feedback_driven_calibration, run_threshold_calibration
 from .dense_bandit import run_dense_bandit_benchmark, seed_dense_bandit_memory
 from .failure_taxonomy import (
     NEGATIVE_ABSTAIN_CASES,
@@ -40,6 +40,7 @@ __all__ = [
     'USER_DOMAIN_SEED_CASES',
     'run_dense_bandit_benchmark',
     'run_failure_taxonomy_benchmark',
+    'run_feedback_driven_calibration',
     'run_hard_negative_benchmark',
     'run_merge_correctness_stress',
     'run_real_world_eval',
