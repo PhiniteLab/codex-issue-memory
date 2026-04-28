@@ -113,6 +113,29 @@ class PreferenceGuardrailTests(unittest.TestCase):
             "resolve_from___file__",
         )
 
+    def test_issue_guardrails_filters_unrelated_sqlite_path_guardrails_for_import_queries(
+        self,
+    ) -> None:
+        result = self.app.issue_guardrails(
+            error_text="ModuleNotFoundError: No module named requests",
+            repo_name="tooling-lab",
+            project_scope="global",
+            limit=5,
+        )
+
+        self.assertTrue(result["guardrails"])
+        self.assertTrue(
+            any("wrong interpreter" in item["title"].lower() for item in result["guardrails"])
+        )
+        self.assertFalse(
+            any(
+                "cwd" in item["prevention_rule"].lower()
+                or "sqlite" in item["title"].lower()
+                or "repository root" in item["prevention_rule"].lower()
+                for item in result["guardrails"]
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

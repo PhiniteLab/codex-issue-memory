@@ -22,6 +22,30 @@ class GuardrailService:
             return normalized
         return normalized[: limit - 1].rstrip() + "…"
 
+    @staticmethod
+    def _is_applicable_candidate(profile: Any, candidate: dict[str, Any]) -> bool:
+        candidate_family = str(candidate.get("error_family", "")).strip()
+        profile_family = str(getattr(profile, "error_family", "")).strip()
+        if (
+            profile_family
+            and profile_family != "generic_runtime_error"
+            and candidate_family
+            and candidate_family != profile_family
+        ):
+            return False
+        candidate_root = str(candidate.get("root_cause_class", "")).strip()
+        profile_root = str(getattr(profile, "root_cause_class", "")).strip()
+        if (
+            profile_root
+            and profile_root != "unknown"
+            and profile_family not in {"", "generic_runtime_error"}
+            and candidate_root
+            and candidate_root != profile_root
+            and candidate_family != profile_family
+        ):
+            return False
+        return True
+
     def plan(
         self,
         *,
@@ -90,6 +114,8 @@ class GuardrailService:
         seen_pairs: set[tuple[int, int]] = set()
         for item in ranked:
             candidate = item.candidate
+            if not self._is_applicable_candidate(profile, candidate):
+                continue
             variant = candidate.get("best_variant") or {}
             pattern_id = int(candidate.get("pattern_id", candidate.get("id", 0)) or 0)
             variant_id = int(candidate.get("variant_id") or variant.get("id") or 0)

@@ -63,7 +63,14 @@ grep -n 'ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT = "1"' "$CODEX_HOME/config.toml"
 grep -n 'ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = "1"' "$CODEX_HOME/config.toml"
 
 echo "[verify] Checking AGENTS snippet..."
-grep -n "Issue-memory workflow" "$CODEX_HOME/AGENTS.md"
+if grep -n "Issue-memory workflow" "$CODEX_HOME/AGENTS.md"; then
+  :
+elif grep -n 'The authoritative `issue_memory` MCP registration lives only in `~/.codex/config.toml`.' "$CODEX_HOME/AGENTS.md"; then
+  :
+else
+  echo "[verify] Expected either the legacy 'Issue-memory workflow' snippet or the current bootstrap issue_memory policy in $CODEX_HOME/AGENTS.md" >&2
+  exit 1
+fi
 
 echo "[verify] Checking bundled reference skill content..."
 test -f "$INSTALL_ROOT/skills/issue-memory-self-learning/SKILL.md"
