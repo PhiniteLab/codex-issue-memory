@@ -299,7 +299,7 @@ If you use user-specific preference rules, pass `user_scope` consistently so the
 
 ## Maintenance CLI
 
-The installed `issue-memory-maint` CLI currently exposes **26 subcommands**.
+Use `issue-memory-maint --help` for the authoritative command list. The CLI is grouped by operational purpose rather than by research or publication workflows.
 
 Installed entrypoint:
 
@@ -326,7 +326,7 @@ python -m codex_issue_memory.maintenance --help
 - `verify-backup`
 - `restore-backup`
 
-### Health and posture
+### Health and lifecycle
 
 - `smoke`
 - `smoke-learning`
@@ -336,18 +336,17 @@ python -m codex_issue_memory.maintenance --help
 - `doctor`
 - `e2e-mcp-reuse-harness`
 
-### Metrics and retention
+### Metrics, retention, and review
 
 - `metrics`
 - `export-dashboard`
 - `prune-retention`
-
-### Review queue
-
 - `review-queue`
 - `resolve-review`
 
 ### Benchmarks and calibration
+
+These commands are runtime-quality and retrieval-quality checks for the MCP service.
 
 - `benchmark-user-domains`
 - `benchmark-failure-taxonomy`
@@ -356,6 +355,15 @@ python -m codex_issue_memory.maintenance --help
 - `benchmark-hard-negatives`
 - `benchmark-merge-stress`
 - `calibrate-thresholds`
+- `calibrate-weights`
+- `analyze-feature-importance`
+- `sweep-implicit`
+
+### Experiment registry
+
+- `create-experiment`
+- `update-experiment`
+- `analyze-experiment`
 
 Examples:
 

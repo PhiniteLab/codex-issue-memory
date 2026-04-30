@@ -88,7 +88,9 @@ class Phase3ImprovementsTests(unittest.TestCase):
         """Strong feedback routes to the correct factor posterior columns."""
         stored = self._store_resolution()
         pattern_id = stored.get("id") or stored.get("pattern_id")
-        self.assertIsNotNone(pattern_id)
+        if pattern_id is None:
+            raise AssertionError("Expected recorded resolution to include a pattern id")
+        pattern_id_int = int(pattern_id)
         # Match to get a retrieval event
         match_result = self.app.issue_match(
             error_text="ModuleNotFoundError: No module named 'requests'",
@@ -100,7 +102,7 @@ class Phase3ImprovementsTests(unittest.TestCase):
         if match_result["matches"] and event_id:
             self.app.issue_feedback(
                 retrieval_event_id=int(event_id),
-                pattern_id=int(pattern_id),
+                pattern_id=pattern_id_int,
                 feedback_type="fix_verified",
             )
         # Verify the stats table has factor data
@@ -196,7 +198,8 @@ class Phase3ImprovementsTests(unittest.TestCase):
 
         # Now active
         active = store.get_active_experiment()
-        self.assertIsNotNone(active)
+        if active is None:
+            raise AssertionError("Expected an active experiment after starting it")
         self.assertEqual(active["experiment_id"], "exp-001")
         self.assertEqual(active["status"], "running")
         self.assertIsInstance(active["treatment_config"], dict)

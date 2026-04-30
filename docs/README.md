@@ -1,63 +1,51 @@
 # Documentation
 
-This directory expands on the root [`README.md`](../README.md) with setup, configuration, usage, operations, architecture, learning internals, and contributor guidance.
+This directory contains the public and contributor documentation for `codex-issue-memory`. It focuses on the MCP runtime, local SQLite persistence, installation, operations, and development workflow.
 
-## Authoritative public surfaces
+## Runtime authority
 
-For public users, read the documentation with these rules in mind:
+Keep these source-of-truth rules in mind while reading or editing docs:
 
-- the authoritative MCP registration lives in `~/.codex/config.toml`
-- keep exactly one `[mcp_servers.issue_memory]` block there
-- the live custom plugin / skill root is `~/.codex/local-plugins/**`
-- bundled skill content in this repository is reference-only; any live custom wrapper should live under `~/.codex/local-plugins/**`
-- example files in `templates/` are reference snippets only
-- runtime defaults come from `src/codex_issue_memory/settings.py`
+- the live MCP registration belongs in `~/.codex/config.toml`;
+- keep exactly one `[mcp_servers.issue_memory]` block unless intentionally testing alternatives;
+- runtime defaults come from `src/codex_issue_memory/settings.py`;
+- `.mcp.json`, `.codex-plugin/`, `templates/`, and bundled `skills/` are reference/distribution material;
+- live custom plugin or skill assets belong under `~/.codex/local-plugins/**`, not inside this repo.
 
 ## Start here
 
 - [`INSTALLATION.md`](INSTALLATION.md): setup, verification, manual registration, and path guidance
-- [`CONFIGURATION.md`](CONFIGURATION.md): runtime variables, defaults, and public configuration model
-- [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md): owner-key contract for one MCP per main Codex conversation
+- [`CONFIGURATION.md`](CONFIGURATION.md): environment variables and runtime defaults
+- [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md): owner-key model for one MCP per main Codex conversation
 - [`USAGE.md`](USAGE.md): MCP tools, direct Python usage, preferences, guardrails, metrics, and CLI commands
 - [`OPERATIONS.md`](OPERATIONS.md): backups, restore, logs, health checks, and troubleshooting
-- [`ROLLOUT.md`](ROLLOUT.md): recommended default runtime posture and alternative configuration choices
-- [`ARCHITECTURE.md`](ARCHITECTURE.md): module responsibilities, request flow, ranking, learning pipeline, storage, and safety controls
+- [`ROLLOUT.md`](ROLLOUT.md): recommended runtime posture and alternatives
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): modules, request flow, ranking, learning pipeline, storage, and safety controls
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): local setup, validation, and contributor expectations
 - [`DEPENDENCIES.md`](DEPENDENCIES.md): Python and system dependencies
 - [`COMPATIBILITY.md`](COMPATIBILITY.md): platform support and WSL guidance
-- [`ROADMAP.md`](ROADMAP.md): development plan and improvement roadmap
+- [`ROADMAP.md`](ROADMAP.md): planned improvements
 
-### Additional references
+## Additional references
 
-- [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md): live launcher checklist for proving true stdio reuse
-
-### Release-critical order for publication
-
-For public release readers:
-
-1. [`INSTALLATION.md`](INSTALLATION.md)
-2. [`CONFIGURATION.md`](CONFIGURATION.md)
-3. [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md)
-4. [`USAGE.md`](USAGE.md)
-5. [`OPERATIONS.md`](OPERATIONS.md)
-6. [`ROLLOUT.md`](ROLLOUT.md)
+- [`ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](ORCHESTRATION_STDIO_REUSE_CHECKLIST.md): checklist for proving true stdio reuse across Codex launch patterns
 
 ## Suggested reading order
 
 1. Read the root [`README.md`](../README.md) for the project overview.
 2. Use [`INSTALLATION.md`](INSTALLATION.md) and [`CONFIGURATION.md`](CONFIGURATION.md) to get a correct live setup.
-3. Read [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md) to understand the owner-key contract.
-4. Use [`USAGE.md`](USAGE.md) and [`OPERATIONS.md`](OPERATIONS.md) for day-to-day usage.
-5. Use [`ROLLOUT.md`](ROLLOUT.md) to choose a configuration posture.
-6. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DEVELOPMENT.md`](DEVELOPMENT.md) before changing code.
-7. Read [`ROADMAP.md`](ROADMAP.md) for planned improvements and learning pipeline evolution.
+3. Read [`OWNER_KEY_CONTRACT.md`](OWNER_KEY_CONTRACT.md) before changing launcher or owner-key behavior.
+4. Use [`USAGE.md`](USAGE.md), [`OPERATIONS.md`](OPERATIONS.md), and [`ROLLOUT.md`](ROLLOUT.md) for day-to-day operation.
+5. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`DEVELOPMENT.md`](DEVELOPMENT.md) before changing code.
+6. Read [`ROADMAP.md`](ROADMAP.md) for future work.
 
 ## Scope
 
-These docs are grounded in the repository as it exists today:
+The docs describe the repository as a runtime product. Core paths are:
 
-- `src/codex_issue_memory/` for the MCP server, retrieval logic, storage, safety, and maintenance CLI
-- `scripts/` for registration, verification, cron, and backup helpers
-- `templates/` for example config snippets
-- `tests/` for regression and benchmark coverage
-- `skills/issue-memory-self-learning/` for bundled reference content related to the issue-memory workflow; any live custom wrapper belongs under `~/.codex/local-plugins/**`
+- `src/codex_issue_memory/`: MCP server, retrieval logic, storage, safety, services, and maintenance CLI
+- `src/codex_issue_memory/sql/`: packaged SQLite migrations
+- `scripts/`: registration, verification, cron, and backup helpers
+- `templates/`: example config snippets
+- `tests/`: regression, lifecycle, diagnostics, and benchmark coverage
+- `skills/issue-memory-self-learning/`: bundled reference content for the issue-memory workflow

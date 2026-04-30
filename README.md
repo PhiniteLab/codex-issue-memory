@@ -2,36 +2,30 @@
 
 ![codex-issue-memory cover](assets/cover.png)
 
-`codex-issue-memory` is a **local-first MCP server for Codex** with an **optional plugin-wrapper layer** for local/custom plugin workflows.
-It stores reusable debugging knowledge in local SQLite, returns compact ranked matches for recurring failures, and ships operational commands for validation, review, backup, and lifecycle health.
+`codex-issue-memory` is a local-first MCP server for Codex. It stores verified fixes, retrieval feedback, preferences, and guardrails in SQLite so repeated failures can be diagnosed from prior evidence instead of re-debugged from scratch.
 
-## Product summary
+## What it provides
 
-- **Primary runtime:** a Python MCP server launched as `python -m codex_issue_memory.server`
-- **Public MCP surface:** exactly **12 MCP tools**
-- **Public maintenance surface:** `issue-memory-maint` with exactly **26 subcommands**
-- **Plugin-wrapper layer:** `.codex-plugin/plugin.json` + `.mcp.json` for local/custom plugin distribution
-- **Live MCP authority:** `~/.codex/config.toml` remains the only authoritative runtime registration surface
+- **MCP runtime:** `python -m codex_issue_memory.server`
+- **Public MCP tools:** 12 tools for matching, inspection, feedback, preferences, guardrails, metrics, and review
+- **Maintenance CLI:** `issue-memory-maint` for schema setup, health checks, backups, telemetry, benchmarks, and lifecycle diagnostics
+- **Local persistence:** SQLite DB plus state/log/backup directories under configurable local paths
+- **Codex integration:** one authoritative live registration in `~/.codex/config.toml`
+- **Optional wrapper metadata:** `.codex-plugin/plugin.json` and `.mcp.json` for local/custom plugin workflows only
 
-If you want the actual `issue_memory` server available in Codex, use **Mode A**.
-If you want local/custom plugin metadata for self-install or manual marketplace-style flows, use **Mode B** in addition to Mode A or a manual MCP registration flow.
+## When to use it
 
-## Why use it
+Use this project when you want to:
 
-Use `codex-issue-memory` when you want to:
-
-- find likely prior fixes from a short error snippet instead of re-debugging from scratch,
-- keep validated fixes, preferences, and guardrails in a local-first store,
-- reduce repeated troubleshooting drift across similar failures,
-- monitor operational health with smoke, doctor, status, backup, and review commands,
-- preserve a self-hosted workflow instead of depending on a hosted memory service.
-
-It is designed for Linux/WSL-style local development and Codex-centered MCP workflows.
+- search prior fixes from a short error excerpt,
+- keep reusable debugging knowledge local,
+- record only verified reusable resolutions,
+- learn from accepted/rejected retrievals,
+- inspect server health, backups, and lifecycle state,
+- keep Codex MCP setup reproducible across sessions.
 
 ## Quick start
 
-For most users, **start here**:
-
 ```bash
 git clone https://github.com/PhiniteLab/codex-issue-memory.git
 cd codex-issue-memory
@@ -39,37 +33,20 @@ bash install.sh
 bash scripts/verify_install.sh
 ```
 
-That path:
-- prepares the Python environment,
-- initializes the SQLite-backed runtime,
-- writes the live `issue_memory` MCP registration to `~/.codex/config.toml`,
-- and verifies that the install is usable.
+The installer prepares a virtualenv, initializes the SQLite store, writes the live `issue_memory` MCP block to `~/.codex/config.toml`, and runs a local verification pass.
 
-**Choose your path:**
-- **Mode A — Standard MCP install:** use this for the real MCP runtime.
-- **Mode B — Plugin-wrapper install:** use this for local/custom plugin packaging metadata and self-install ergonomics.
+## Installation modes
 
-## Install Mode A — Standard MCP install
+### Install Mode A — Standard MCP install
 
-**Use this mode when you want Codex to actually run the `issue_memory` MCP server.**
-
-### Recommended install
+Use this for the real runtime.
 
 ```bash
-git clone https://github.com/PhiniteLab/codex-issue-memory.git
-cd codex-issue-memory
 bash install.sh
 bash scripts/verify_install.sh
 ```
 
-What Mode A does:
-- installs or updates the package under `INSTALL_ROOT` (default `~/infra/codex-issue-memory`),
-- creates a virtualenv under `INSTALL_ROOT/.venv`,
-- initializes runtime DB/state directories,
-- writes or updates exactly one live `[mcp_servers.issue_memory]` block in `~/.codex/config.toml`,
-- registers the env defaults used by the MCP reuse / owner-key flow.
-
-### Quick verification
+Verify the live registration:
 
 ```bash
 grep -n '^\[mcp_servers.issue_memory\]' ~/.codex/config.toml
@@ -77,13 +54,13 @@ issue-memory-maint smoke
 issue-memory-maint doctor --mode shadow --max-instances 0
 ```
 
-Expected result:
-- exactly **one** `issue_memory` MCP block in `~/.codex/config.toml`
-- successful smoke / doctor output
+Expected posture:
+
+- exactly one live `[mcp_servers.issue_memory]` block,
+- writable Linux/WSL-local SQLite/state paths,
+- successful smoke and doctor output.
 
 ### Manual package setup
-
-Use this if you want a manual install without the opinionated installer:
 
 ```bash
 python3 -m venv .venv
@@ -94,127 +71,52 @@ python -m codex_issue_memory.maintenance init-db
 python -m codex_issue_memory.server
 ```
 
-Then add a single live `[mcp_servers.issue_memory]` block to `~/.codex/config.toml`.
+Then add one live `[mcp_servers.issue_memory]` block to `~/.codex/config.toml`.
 
-## Install Mode B — Plugin-wrapper install
+### Install Mode B — Plugin-wrapper metadata
 
-**Use this mode when you want local/custom plugin metadata.**
-
-This mode is **not** the live MCP registration path.
-It provides wrapper/distribution files for environments that use local plugins, plugin discovery, or manual marketplace-style bridges.
-
-```bash
-mkdir -p ~/.codex/local-plugins
-cd ~/.codex/local-plugins
-git clone https://github.com/PhiniteLab/codex-issue-memory.git codex-issue-memory
-cd codex-issue-memory
-```
-
-Wrapper files in this repo:
-- `.codex-plugin/plugin.json` → plugin identity and interface metadata
-- `.mcp.json` → local/remote server connection templates
-
-### Sanity check for wrapper metadata
+Use this only when you need local/custom plugin metadata or manual marketplace-style integration.
 
 ```bash
 python3 -m json.tool .codex-plugin/plugin.json
 python3 -m json.tool .mcp.json
 ```
 
-### Important limitation
+Mode B does **not** create the Python runtime, initialize the database, or register the live MCP server. For runtime use, choose Mode A or manual registration.
 
-Mode B by itself does **not**:
-- create the Python runtime,
-- initialize the SQLite database,
-- or register the live `issue_memory` MCP server in `~/.codex/config.toml`.
+## MCP tools
 
-For real runtime usage, you still need **Mode A** or a manual MCP registration flow.
+### Retrieval and inspection
 
-## Manual marketplace integration
+- `issue_match` — find likely prior issue patterns for a failure
+- `issue_get` — load full details for one pattern
+- `issue_search` — keyword search stored patterns
+- `issue_recent` — list recent patterns
 
-This repository is **not** an official OpenAI Marketplace publication.
+### Write-back and learning
 
-Use this path only when you need:
-- self-install from GitHub,
-- local/custom plugin usage under `~/.codex/local-plugins/**`, or
-- a manual marketplace-style bridge in your own environment.
-
-Reference examples live in:
-- `templates/codex_issue_memory.plugin-wrapper-example.md`
-
-Recommended rule of thumb:
-- use **Mode A** for runtime,
-- use **Mode B** for plugin metadata/distribution,
-- do not treat `.mcp.json` as the authoritative live MCP control plane.
-
-## First-use examples
-
-### Public MCP surface — 12 tools
-
-**Retrieval and inspection**
-- `issue_match` — find the best matching known issue for a failure excerpt
-- `issue_get` — inspect one stored issue in more detail
-- `issue_search` — keyword search across stored issues
-- `issue_recent` — list recent memory entries
-
-**Write-back and feedback**
 - `issue_record_resolution` — store a verified reusable fix
-- `issue_feedback` — record retrieval feedback for ranking improvement
+- `issue_feedback` — record accepted/rejected/fix feedback
 
-**Preferences and guardrails**
-- `issue_set_preference` — save a prompt-driven preference rule
-- `issue_list_preferences` — list stored preference rules
-- `issue_guardrails` — return proactive prevention guidance
+### Preferences and guardrails
 
-**Operations and review**
-- `issue_metrics` — inspect operational metrics
-- `issue_review_queue` — list pending or resolved review items
+- `issue_set_preference` — save prompt-driven strategy preferences
+- `issue_list_preferences` — list saved preferences
+- `issue_guardrails` — retrieve proactive prevention guidance
+
+### Operations and review
+
+- `issue_metrics` — report operational metrics
+- `issue_review_queue` — list pending/resolved review items
 - `issue_review_resolve` — resolve review queue items
 
-### Public maintenance CLI surface — 26 subcommands
+## Maintenance CLI
 
-**Schema and bootstrap**
-- `init-db`
-- `migrate-v2`
-- `schema-version`
-
-**Backups**
-- `backup`
-- `list-backups`
-- `verify-backup`
-- `restore-backup`
-
-**Health and lifecycle**
-- `smoke`
-- `smoke-learning`
-- `server-status`
-- `runtime-diagnostics`
-- `recommended-config`
-- `doctor`
-- `e2e-mcp-reuse-harness`
-
-**Operations telemetry**
-- `metrics`
-- `export-dashboard`
-- `prune-retention`
-
-**Review queue**
-- `review-queue`
-- `resolve-review`
-
-**Benchmarks and calibration**
-- `benchmark-user-domains`
-- `benchmark-failure-taxonomy`
-- `benchmark-dense-bandit`
-- `benchmark-real-world`
-- `benchmark-hard-negatives`
-- `benchmark-merge-stress`
-- `calibrate-thresholds`
-
-### Common CLI commands
+Common commands:
 
 ```bash
 issue-memory-maint smoke
+issue-memory-maint smoke-learning
 issue-memory-maint doctor --mode shadow --max-instances 0
 issue-memory-maint server-status
 issue-memory-maint metrics --window-days 30
@@ -222,7 +124,23 @@ issue-memory-maint review-queue --status pending --limit 20
 issue-memory-maint e2e-mcp-reuse-harness --json
 ```
 
-### Library-level example
+Useful command groups:
+
+- **Schema:** `init-db`, `migrate-v2`, `schema-version`
+- **Backups:** `backup`, `list-backups`, `verify-backup`, `restore-backup`
+- **Health/lifecycle:** `smoke`, `smoke-learning`, `server-status`, `runtime-diagnostics`, `recommended-config`, `doctor`, `e2e-mcp-reuse-harness`
+- **Telemetry/retention:** `metrics`, `export-dashboard`, `prune-retention`
+- **Review queue:** `review-queue`, `resolve-review`
+- **Benchmarks/calibration:** `benchmark-user-domains`, `benchmark-failure-taxonomy`, `benchmark-dense-bandit`, `benchmark-real-world`, `benchmark-hard-negatives`, `benchmark-merge-stress`, `calibrate-thresholds`, `calibrate-weights`, `analyze-feature-importance`, `sweep-implicit`
+- **Experiment registry:** `create-experiment`, `update-experiment`, `analyze-experiment`
+
+For the complete CLI surface:
+
+```bash
+issue-memory-maint --help
+```
+
+## Python API example
 
 ```python
 from codex_issue_memory.app import IssueMemoryApp
@@ -235,7 +153,6 @@ result = app.issue_match(
     file_path="api/worker.py",
     project_scope="my-repo",
 )
-
 print(result["decision"])
 ```
 
@@ -252,106 +169,86 @@ app.issue_record_resolution(
 ## Architecture flow
 
 ```text
-Failure appears
+Failure excerpt
   ↓
-Normalize failure into a structured query profile
+Normalize into a query profile
   ↓
-Retrieve ranked candidates from local SQLite-backed memory
+Retrieve candidates from SQLite-backed memory
   ↓
-Return one of: match / ambiguous / abstain
+Rank and decide: match / ambiguous / abstain
   ↓
-Apply feedback, preferences, and guardrails where relevant
+Return compact guidance through MCP
   ↓
-Record validated fixes and keep operational telemetry for lifecycle checks
+Record feedback and verified reusable fixes
 ```
 
-Operationally, the recommended live posture is:
-- one authoritative MCP registration in `~/.codex/config.toml`,
-- one stable owner key per main Codex conversation,
-- duplicate launches for the same owner key exiting with code `75` so the existing conversation MCP can be reused.
+## Runtime authority and safety
 
-## Security / guardrails
-
-- **Single authority rule:** keep the live MCP authority in `~/.codex/config.toml`.
+- Keep the live MCP authority in `~/.codex/config.toml`.
 - Keep exactly one `[mcp_servers.issue_memory]` block unless you intentionally manage alternatives.
-- Prefer Linux/WSL-local writable paths for the active SQLite database.
-- Treat repo `skills/` and `templates/` as bundled reference/distribution material, not as live runtime authority.
-- Verify fixes before writing them back into issue memory.
-- Use project-specific scope when a failure pattern is not globally reusable.
+- Prefer Linux/WSL-local writable paths for DB, state, logs, and backups.
+- Treat `.mcp.json`, `.codex-plugin/`, `templates/`, and bundled `skills/` as distribution/reference material, not the live runtime authority.
+- Write memories only after a fix is verified and reusable.
+- Use project-specific scope when a memory should not be global.
 
-## Validation / doctor / smoke
+## Validation
 
-### Standard runtime validation
+Recommended local checks:
 
 ```bash
-cd ~/infra/codex-issue-memory
 bash scripts/verify_install.sh
-issue-memory-maint smoke
-issue-memory-maint doctor --mode shadow --max-instances 0
-issue-memory-maint server-status
-issue-memory-maint e2e-mcp-reuse-harness --json
+python -m pytest
+python -m codex_issue_memory.maintenance smoke
+python -m codex_issue_memory.maintenance server-status
+python -m codex_issue_memory.maintenance e2e-mcp-reuse-harness --json
 ```
 
-### Wrapper metadata validation
+Optional checks when available:
 
 ```bash
-python3 scripts/validate_plugin_distribution.py
-```
-
-### Helpful live checks
-
-```bash
-grep -n '^\[mcp_servers.issue_memory\]' ~/.codex/config.toml
-grep -n 'ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY = "1"' ~/.codex/config.toml
-grep -n 'ISSUE_MEMORY_MAX_MCP_INSTANCES = "0"' ~/.codex/config.toml
+pyright
+ruff check src tests scripts
 ```
 
 ## Troubleshooting
 
-- **Codex does not show `issue_memory`**: restart Codex and confirm there is exactly one live `[mcp_servers.issue_memory]` block in `~/.codex/config.toml`.
-- **Mode confusion**: if you need the real MCP runtime, use **Mode A**. Mode B only adds plugin-wrapper metadata.
-- **Install problems**: retry with `SKIP_CRON_INSTALL=1 bash install.sh` and confirm Python / pip / venv access.
-- **Weak retrieval quality**: provide a shorter but more meaningful error excerpt plus command, file path, and project scope.
-- **DB path / permission issues**: keep the active writable DB under Linux/WSL-local storage such as `~/.local/share/codex-issue-memory`.
-
-## Development notes
-
-- Runtime behavior should stay backward-compatible; wrapper files are additive.
-- Do not imply official OpenAI marketplace publication in docs or release notes.
-- For code changes, prefer validating with `pytest` plus the repository’s smoke/doctor flows.
-- Useful references:
-  - [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
-  - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
-  - [`docs/USAGE.md`](docs/USAGE.md)
-  - [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
-  - [`docs/OWNER_KEY_CONTRACT.md`](docs/OWNER_KEY_CONTRACT.md)
-  - [`docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md)
-  - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-  - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
-  - [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- **Codex does not show `issue_memory`:** restart Codex and verify exactly one live `[mcp_servers.issue_memory]` block.
+- **Install problems:** retry with `SKIP_CRON_INSTALL=1 bash install.sh` and confirm Python/venv access.
+- **Weak retrieval quality:** pass a short meaningful error excerpt plus command, file path, and project scope.
+- **DB path or permission issues:** keep the writable DB under local Linux/WSL storage such as `~/.local/share/codex-issue-memory`.
 
 ## Documentation map
 
-See [`docs/README.md`](docs/README.md) for the full documentation index and recommended reading order.
+Start with [`docs/README.md`](docs/README.md). Key docs:
+
+- [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
+- [`docs/USAGE.md`](docs/USAGE.md)
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
+- [`docs/OWNER_KEY_CONTRACT.md`](docs/OWNER_KEY_CONTRACT.md)
+- [`docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md`](docs/ORCHESTRATION_STDIO_REUSE_CHECKLIST.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Repository layout
 
 ```text
-src/codex_issue_memory/            MCP runtime and app logic
-scripts/                           install, registration, cron, and verification helpers
-docs/                              public documentation
-templates/                         reference snippets and plugin-wrapper examples
-skills/                            bundled reference content
-tests/                             regression and benchmark coverage
-reports_lifecycle_investigation/    historical lifecycle debugging reports
-.codex-plugin/                     local/custom plugin metadata
-.mcp.json                          wrapper server templates (remote + local command)
+src/codex_issue_memory/             MCP runtime, services, storage, matching, maintenance
+src/codex_issue_memory/sql/         SQLite migrations packaged with the runtime
+scripts/                            install, registration, backup, and verification helpers
+docs/                               public and contributor documentation
+templates/                          reference snippets and plugin-wrapper examples
+skills/                             bundled reference skill content
+tests/                              regression, lifecycle, diagnostics, and benchmark tests
+reports_lifecycle_investigation/    historical lifecycle debugging notes and test evidence
+.codex-plugin/                      local/custom plugin metadata
+.mcp.json                           wrapper server templates
 ```
 
 ## Contributing
 
-Contributions improving install clarity, retrieval quality, and operational safety are welcome.
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Contributions improving install clarity, retrieval quality, operational safety, and validation are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## License
 
