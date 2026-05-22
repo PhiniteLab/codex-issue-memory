@@ -34,7 +34,7 @@ class ConsolidationService:
     PATTERN_ATTACH_THRESHOLD = 0.74
     VARIANT_ATTACH_THRESHOLD = 0.84
     EXACT_PATTERN_VARIANT_THRESHOLD = 0.33
-    REVIEW_THRESHOLD = 0.66
+    REVIEW_THRESHOLD = 0.73
 
     def __init__(self, store: IssueMemoryStore, matcher: IssueMatcher) -> None:
         self.store = store
@@ -166,19 +166,17 @@ class ConsolidationService:
                     proposed_variant_key=proposed_variant_key,
                 )
                 reasons.extend(variant_reasons)
-            if item.score >= self.PATTERN_ATTACH_THRESHOLD:
-                attach_variant = (
-                    variant_id
-                    if variant_id is not None
-                    and variant_score >= self.VARIANT_ATTACH_THRESHOLD
-                    else None
-                )
-                requires_review = (
-                    attach_variant is not None
-                    and self.REVIEW_THRESHOLD
-                    <= item.score
-                    < self.PATTERN_ATTACH_THRESHOLD
-                )
+            attach_variant = (
+                variant_id
+                if variant_id is not None
+                and variant_score >= self.VARIANT_ATTACH_THRESHOLD
+                else None
+            )
+            strong_pattern_attach = item.score >= self.PATTERN_ATTACH_THRESHOLD
+            review_band_hit = (
+                self.REVIEW_THRESHOLD <= item.score < self.PATTERN_ATTACH_THRESHOLD
+            )
+            if strong_pattern_attach:
                 return ConsolidationPlan(
                     matched_pattern_id=pattern_id,
                     matched_variant_id=attach_variant,
@@ -193,7 +191,20 @@ class ConsolidationService:
                     ),
                     consolidation_score=round(max(item.score, variant_score), 4),
                     reasons=reasons[:12],
-                    requires_review=requires_review,
+                    requires_review=False,
+                )
+            if review_band_hit:
+                return ConsolidationPlan(
+                    matched_pattern_id=None,
+                    matched_variant_id=None,
+                    pattern_signature=proposed_pattern_key,
+                    proposed_pattern_key=proposed_pattern_key,
+                    proposed_variant_key=proposed_variant_key,
+                    match_strategy="retrieval_review",
+                    variant_strategy="retrieval_new_pattern_review",
+                    consolidation_score=round(max(item.score, variant_score), 4),
+                    reasons=[*reasons[:11], "review-threshold-band"],
+                    requires_review=True,
                 )
             break
 

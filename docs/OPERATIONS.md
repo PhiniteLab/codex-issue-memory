@@ -59,13 +59,13 @@ issue-memory-maint list-backups --limit 20
 ### Verify a backup
 
 ```bash
-issue-memory-maint verify-backup /path/to/issue_memory_YYYYMMDD_HHMMSS.sqlite3
+issue-memory-maint verify-backup /path/to/issue_memory_YYYYMMDD_HHMMSS_microseconds.sqlite3
 ```
 
 ### Restore a backup
 
 ```bash
-issue-memory-maint restore-backup /path/to/issue_memory_YYYYMMDD_HHMMSS.sqlite3
+issue-memory-maint restore-backup /path/to/issue_memory_YYYYMMDD_HHMMSS_microseconds.sqlite3
 ```
 
 By default, restore creates a safety backup of the current live database before replacing it.
@@ -80,7 +80,7 @@ issue-memory-maint restore-backup /path/to/backup.sqlite3 --no-safety-backup
 
 Each backup run creates:
 
-- a snapshot file named like `issue_memory_YYYYMMDD_HHMMSS.sqlite3`
+- a snapshot file named like `issue_memory_YYYYMMDD_HHMMSS_microseconds.sqlite3`
 - a sibling JSON manifest containing creation time, source DB path, digest, size, and host information
 
 If `ISSUE_MEMORY_WINDOWS_BACKUP_TARGET` is set, the snapshot and manifest are mirrored there as well.

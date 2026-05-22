@@ -7,6 +7,9 @@ import unittest
 from unittest import mock
 
 from codex_issue_memory.app import IssueMemoryApp
+from codex_issue_memory.models import QueryProfile
+from codex_issue_memory.retrieval.ranker import RankedCandidate
+from codex_issue_memory.services.consolidation_service import ConsolidationService
 
 
 class VariantSplitMergeTests(unittest.TestCase):
@@ -178,6 +181,65 @@ class VariantSplitMergeTests(unittest.TestCase):
         self.assertEqual(variant_count, 0)
         self.assertEqual(episode_count, 0)
         self.assertEqual(example_count, 0)
+
+
+class ConsolidationReviewBandTests(unittest.TestCase):
+    def test_review_band_candidate_requires_review_without_forcing_variant_merge(
+        self,
+    ) -> None:
+        store = mock.Mock()
+        matcher = mock.Mock()
+        store.find_pattern_by_signature.return_value = None
+        store.find_pattern_by_id.return_value = {"id": 17, "signature": "pattern-17"}
+        matcher.ranked_candidates.return_value = [
+            RankedCandidate(
+                candidate={
+                    "id": 17,
+                    "pattern_id": 17,
+                    "project_scope": "global",
+                    "error_family": "sqlite_error",
+                    "root_cause_class": "cwd_relative_path_bug",
+                    "best_variant": {"id": 23},
+                },
+                score=0.735,
+                features={},
+                reasons=["lexical-overlap"],
+            )
+        ]
+        service = ConsolidationService(store, matcher)
+        profile = QueryProfile(
+            raw_text="FileNotFoundError: references/contractsDatabase.sqlite3",
+            normalized_text="filenotfounderror references contractsdatabase sqlite3",
+            tokens=["filenotfounderror", "contractsdatabase", "sqlite3"],
+            exception_types=["FileNotFoundError"],
+            error_family="sqlite_error",
+            root_cause_class="cwd_relative_path_bug",
+            tags=["sqlite", "path"],
+            evidence=["contractsDatabase.sqlite3"],
+            project_scope="global",
+            user_scope="mehmet",
+        )
+
+        plan = service.plan(
+            profile=profile,
+            title="Relative sqlite path breaks outside repo root",
+            project_scope="global",
+            canonical_symptom="sqlite database path fails outside repo root",
+            merged_tags=["sqlite", "path"],
+            command="python -m app.main",
+            file_path="services/db_loader.py",
+            stack_excerpt='File "services/db_loader.py", line 12, in load_db',
+            env_json='{"python": "3.12"}',
+            repo_name="repo-alpha",
+            git_commit="abc123",
+            session_id="session-1",
+        )
+
+        self.assertTrue(plan.requires_review)
+        self.assertIsNone(plan.matched_pattern_id)
+        self.assertIsNone(plan.matched_variant_id)
+        self.assertEqual(plan.match_strategy, "retrieval_review")
+        self.assertEqual(plan.variant_strategy, "retrieval_new_pattern_review")
 
 
 if __name__ == "__main__":

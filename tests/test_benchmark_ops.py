@@ -11,6 +11,7 @@ from codex_issue_memory.benchmarks import (
     run_merge_correctness_stress,
     seed_hard_negative_memory,
 )
+from codex_issue_memory.maintenance import evaluate_benchmark_gate_reports
 
 
 class Phase6BenchmarksTests(unittest.TestCase):
@@ -56,6 +57,34 @@ class Phase6BenchmarksTests(unittest.TestCase):
         report = run_merge_correctness_stress(app)
         self.assertEqual(report["catastrophic_variant_merge_count"], 0)
         self.assertGreaterEqual(report["success_rate"], 0.75)
+
+    def test_quality_gate_benchmark_evaluator_flags_regression(self) -> None:
+        report = evaluate_benchmark_gate_reports(
+            {
+                "hard_negatives": {
+                    "positive_top1_accuracy": 0.59,
+                    "unsafe_clear_match_rate": 0.51,
+                },
+                "merge_stress": {
+                    "catastrophic_variant_merge_count": 1,
+                    "success_rate": 0.74,
+                },
+            }
+        )
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["summary"]["failed"], 4)
+
+    def test_quality_gate_benchmark_evaluator_fails_closed_without_required_reports(
+        self,
+    ) -> None:
+        report = evaluate_benchmark_gate_reports({})
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["summary"]["failed"], 2)
+        self.assertEqual(
+            {check["name"] for check in report["checks"]},
+            {"hard_negatives_report_present", "merge_stress_report_present"},
+        )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 CONFIG_BEGIN = "# >>> codex-issue-memory >>>"
@@ -18,6 +19,10 @@ def replace_block(text: str, begin: str, end: str, new_block: str) -> str:
     if text and not text.endswith("\n"):
         text += "\n"
     return text + ("\n" if text else "") + new_block
+
+
+def toml_basic_string(value: str | Path) -> str:
+    return json.dumps(str(value))
 
 
 def main() -> None:
@@ -38,38 +43,39 @@ def main() -> None:
     config_path = codex_home / "config.toml"
     config_path.touch(exist_ok=True)
     config_text = config_path.read_text(encoding="utf-8")
+    q = toml_basic_string
 
     config_block = f"""{CONFIG_BEGIN}
 [mcp_servers.issue_memory]
-command = "{install_root / ".venv" / "bin" / "python"}"
-args = ["-m", "codex_issue_memory.server"]
-cwd = "{install_root}"
+command = {q(install_root / ".venv" / "bin" / "python")}
+args = [{q("-m")}, {q("codex_issue_memory.server")}]
+cwd = {q(install_root)}
 startup_timeout_sec = 15
 tool_timeout_sec = 25
 enabled = true
 required = false
 [mcp_servers.issue_memory.env]
-ISSUE_MEMORY_HOME = "{data_root}"
-ISSUE_MEMORY_DB_PATH = "{data_root / "issue_memory.sqlite3"}"
-ISSUE_MEMORY_STATE_DIR = "{state_root}"
-ISSUE_MEMORY_BACKUP_DIR = "{data_root / "backups"}"
-ISSUE_MEMORY_LOG_DIR = "{state_root / "log"}"
-ISSUE_MEMORY_SERVER_LOCK_DIR = "{state_root / "run"}"
-ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE = "75"
-ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY = "1"
-ISSUE_MEMORY_SERVER_OWNER_KEY_ENV = "ISSUE_MEMORY_MAIN_CONVERSATION_KEY"
-ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY = "1"
-ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE = "0"
-ISSUE_MEMORY_MAX_MCP_INSTANCES = "0"
-ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON = "1"
-ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS = "0"
-ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS = "1.0"
-ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT = "1"
-ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = "1"
-ISSUE_MEMORY_ENABLE_PREFERENCE_RULES = "1"
-ISSUE_MEMORY_ENABLE_REDACTION = "1"
-ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE = "1"
-ISSUE_MEMORY_CALIBRATION_PROFILE_PATH = "{state_root / "calibration_profile.json"}"
+ISSUE_MEMORY_HOME = {q(data_root)}
+ISSUE_MEMORY_DB_PATH = {q(data_root / "issue_memory.sqlite3")}
+ISSUE_MEMORY_STATE_DIR = {q(state_root)}
+ISSUE_MEMORY_BACKUP_DIR = {q(data_root / "backups")}
+ISSUE_MEMORY_LOG_DIR = {q(state_root / "log")}
+ISSUE_MEMORY_SERVER_LOCK_DIR = {q(state_root / "run")}
+ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE = {q("75")}
+ISSUE_MEMORY_SERVER_REQUIRE_OWNER_KEY = {q("1")}
+ISSUE_MEMORY_SERVER_OWNER_KEY_ENV = {q("ISSUE_MEMORY_MAIN_CONVERSATION_KEY")}
+ISSUE_MEMORY_SERVER_ALLOW_SYNTHETIC_OWNER_KEY = {q("1")}
+ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE = {q("0")}
+ISSUE_MEMORY_MAX_MCP_INSTANCES = {q("0")}
+ISSUE_MEMORY_SERVER_ENFORCE_PARENT_SINGLETON = {q("1")}
+ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS = {q("0")}
+ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS = {q("1.0")}
+ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT = {q("1")}
+ISSUE_MEMORY_ENABLE_STRATEGY_BANDIT_SHADOW_MODE = {q("1")}
+ISSUE_MEMORY_ENABLE_PREFERENCE_RULES = {q("1")}
+ISSUE_MEMORY_ENABLE_REDACTION = {q("1")}
+ISSUE_MEMORY_ENABLE_CALIBRATION_PROFILE = {q("1")}
+ISSUE_MEMORY_CALIBRATION_PROFILE_PATH = {q(state_root / "calibration_profile.json")}
 # Prefer explicit ISSUE_MEMORY_MAIN_CONVERSATION_KEY injection per main conversation.
 # Current Codex runtimes may also derive the main-conversation key from CODEX_THREAD_ID session lineage.
 # Optional diagnostics: ISSUE_MEMORY_MAIN_CONVERSATION_ROLE=main|subagent

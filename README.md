@@ -131,7 +131,7 @@ Useful command groups:
 - **Health/lifecycle:** `smoke`, `smoke-learning`, `server-status`, `runtime-diagnostics`, `recommended-config`, `doctor`, `e2e-mcp-reuse-harness`
 - **Telemetry/retention:** `metrics`, `export-dashboard`, `prune-retention`
 - **Review queue:** `review-queue`, `resolve-review`
-- **Benchmarks/calibration:** `benchmark-user-domains`, `benchmark-failure-taxonomy`, `benchmark-dense-bandit`, `benchmark-real-world`, `benchmark-hard-negatives`, `benchmark-merge-stress`, `calibrate-thresholds`, `calibrate-weights`, `analyze-feature-importance`, `sweep-implicit`
+- **Benchmarks/calibration:** `quality-gate-benchmarks`, `benchmark-user-domains`, `benchmark-failure-taxonomy`, `benchmark-dense-bandit`, `benchmark-real-world`, `benchmark-hard-negatives`, `benchmark-merge-stress`, `calibrate-thresholds`, `calibrate-weights`, `analyze-feature-importance`, `sweep-implicit`
 - **Experiment registry:** `create-experiment`, `update-experiment`, `analyze-experiment`
 
 For the complete CLI surface:

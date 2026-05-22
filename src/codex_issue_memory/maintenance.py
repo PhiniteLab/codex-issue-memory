@@ -747,6 +747,140 @@ def cmd_benchmark_merge_stress() -> None:
     )
 
 
+def evaluate_benchmark_gate_reports(
+    reports: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Evaluate benchmark reports against conservative release-gate thresholds."""
+
+    checks: list[dict[str, Any]] = []
+
+    def add(name: str, ok: bool, detail: str) -> None:
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+
+    hard = reports.get("hard_negatives")
+    if not isinstance(hard, dict) or not hard:
+        add("hard_negatives_report_present", False, "required report missing")
+    else:
+        positive_top1 = float(hard.get("positive_top1_accuracy", 0.0))
+        unsafe_rate = float(hard.get("unsafe_clear_match_rate", 1.0))
+        add(
+            "hard_negatives_positive_top1",
+            positive_top1 >= 0.60,
+            f"positive_top1_accuracy={positive_top1:.4f} threshold>=0.60",
+        )
+        add(
+            "hard_negatives_unsafe_clear_match_rate",
+            unsafe_rate <= 0.50,
+            f"unsafe_clear_match_rate={unsafe_rate:.4f} threshold<=0.50",
+        )
+
+    merge = reports.get("merge_stress")
+    if not isinstance(merge, dict) or not merge:
+        add("merge_stress_report_present", False, "required report missing")
+    else:
+        catastrophic = int(merge.get("catastrophic_variant_merge_count", 999999))
+        success_rate = float(merge.get("success_rate", 0.0))
+        add(
+            "merge_stress_no_catastrophic_variant_merge",
+            catastrophic == 0,
+            f"catastrophic_variant_merge_count={catastrophic} threshold=0",
+        )
+        add(
+            "merge_stress_success_rate",
+            success_rate >= 0.75,
+            f"success_rate={success_rate:.4f} threshold>=0.75",
+        )
+
+    real_world = reports.get("real_world", {})
+    if real_world:
+        top1 = float(real_world.get("top1_accuracy", 0.0))
+        precision = float(real_world.get("clear_match_precision", 0.0))
+        negative_safety = float(real_world.get("negative_safety_rate", 0.0))
+        add("real_world_top1", top1 >= 0.80, f"top1_accuracy={top1:.4f} threshold>=0.80")
+        add(
+            "real_world_clear_precision",
+            precision >= 0.80,
+            f"clear_match_precision={precision:.4f} threshold>=0.80",
+        )
+        add(
+            "real_world_negative_safety",
+            negative_safety >= 0.70,
+            f"negative_safety_rate={negative_safety:.4f} threshold>=0.70",
+        )
+
+    dense = reports.get("dense_bandit", {})
+    if dense:
+        dense_top1 = float(dense.get("dense_top1_accuracy", 0.0))
+        add(
+            "dense_bandit_top1",
+            dense_top1 >= 0.75,
+            f"dense_top1_accuracy={dense_top1:.4f} threshold>=0.75",
+        )
+
+    user = reports.get("user_domains", {})
+    if user:
+        user_top1 = float(user.get("top1_accuracy", 0.0))
+        failures = user.get("failures", [])
+        add(
+            "user_domains_top1",
+            user_top1 >= 0.95,
+            f"top1_accuracy={user_top1:.4f} threshold>=0.95",
+        )
+        add(
+            "user_domains_no_failures",
+            not failures,
+            f"failure_count={len(failures) if isinstance(failures, list) else 'unknown'} threshold=0",
+        )
+
+    failed = [check for check in checks if not check["ok"]]
+    return {
+        "status": "ok" if not failed else "failed",
+        "checks": checks,
+        "summary": {"total": len(checks), "failed": len(failed)},
+    }
+
+
+def cmd_quality_gate_benchmarks(*, full: bool = False) -> None:
+    """Run benchmark smoke gates and fail fast for unsafe retrieval regressions."""
+
+    def run_hard(app: IssueMemoryApp) -> dict[str, Any]:
+        seed_hard_negative_memory(app)
+        return run_hard_negative_benchmark(app, repeats=1)
+
+    def run_merge(app: IssueMemoryApp) -> dict[str, Any]:
+        return run_merge_correctness_stress(app)
+
+    reports = {
+        "hard_negatives": _with_temp_issue_memory(run_hard),
+        "merge_stress": _with_temp_issue_memory(run_merge),
+    }
+    if full:
+        def run_real(app: IssueMemoryApp) -> dict[str, Any]:
+            seed_real_world_memory(app)
+            return run_real_world_eval(app, repeats=1)
+
+        def run_dense(app: IssueMemoryApp) -> dict[str, Any]:
+            seed_dense_bandit_memory(app)
+            return run_dense_bandit_benchmark(app, repeats=4)
+
+        def run_user(app: IssueMemoryApp) -> dict[str, Any]:
+            seed_user_domain_memory(app)
+            return run_user_domain_benchmark(app, repeats=2)
+
+        reports["real_world"] = _with_temp_issue_memory(run_real)
+        reports["dense_bandit"] = _with_temp_issue_memory(run_dense)
+        reports["user_domains"] = _with_temp_issue_memory(run_user)
+
+    gate = evaluate_benchmark_gate_reports(reports)
+    payload = _persist_report(
+        "quality_gate_benchmarks",
+        {"status": gate["status"], "full": bool(full), "reports": reports, "gate": gate},
+    )
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    if gate["status"] != "ok":
+        raise SystemExit(1)
+
+
 def cmd_calibrate_thresholds(write_profile: bool, from_feedback: bool = False) -> None:
     if from_feedback:
         store = IssueMemoryStore.from_env()
@@ -1034,6 +1168,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("benchmark-real-world")
     subparsers.add_parser("benchmark-hard-negatives")
     subparsers.add_parser("benchmark-merge-stress")
+    benchmark_gate = subparsers.add_parser("quality-gate-benchmarks")
+    benchmark_gate.add_argument("--full", action="store_true")
     calibrate = subparsers.add_parser("calibrate-thresholds")
     calibrate.add_argument("--write-profile", action="store_true")
     calibrate.add_argument(
@@ -1129,6 +1265,8 @@ def main() -> None:
         cmd_benchmark_hard_negatives()
     elif args.command == "benchmark-merge-stress":
         cmd_benchmark_merge_stress()
+    elif args.command == "quality-gate-benchmarks":
+        cmd_quality_gate_benchmarks(full=bool(args.full))
     elif args.command == "calibrate-thresholds":
         cmd_calibrate_thresholds(
             write_profile=bool(args.write_profile),

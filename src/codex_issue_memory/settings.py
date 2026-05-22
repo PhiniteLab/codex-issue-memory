@@ -2,9 +2,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from pathlib import Path
+import math
 import os
+from pathlib import Path
 import socket
+
+
+def _parse_int(value: str | None, default: int) -> int:
+    raw = "" if value is None else value.strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _parse_float(value: str | None, default: float) -> float:
+    raw = "" if value is None else value.strip()
+    if not raw:
+        return default
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return default
+    if not math.isfinite(parsed):
+        return default
+    return parsed
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    return _parse_int(os.environ.get(name), default)
+
+
+def _parse_float_env(name: str, default: float) -> float:
+    return _parse_float(os.environ.get(name), default)
 
 
 @dataclass(frozen=True)
@@ -120,14 +152,12 @@ class Settings:
             "ISSUE_MEMORY_ENFORCE_SINGLE_MCP_INSTANCE", "1"
         ).strip().lower() not in {"0", "false", "no"}
         if raw_max_instances:
-            try:
-                parsed_max_instances = int(raw_max_instances)
-            except ValueError:
-                max_mcp_instances = None if require_owner_key else 2
-            else:
-                max_mcp_instances = (
-                    None if parsed_max_instances <= 0 else max(parsed_max_instances, 1)
-                )
+            parsed_max_instances = _parse_int(
+                raw_max_instances, 0 if require_owner_key else 2
+            )
+            max_mcp_instances = (
+                None if parsed_max_instances <= 0 else max(parsed_max_instances, 1)
+            )
         else:
             max_mcp_instances = (
                 None if require_owner_key else (1 if compat_single_cap else 2)
@@ -136,10 +166,7 @@ class Settings:
             "ISSUE_MEMORY_SERVER_DUPLICATE_EXIT_CODE", ""
         ).strip()
         if raw_duplicate_exit_code:
-            try:
-                duplicate_exit_code = max(int(raw_duplicate_exit_code), 0)
-            except ValueError:
-                duplicate_exit_code = 75
+            duplicate_exit_code = max(_parse_int(raw_duplicate_exit_code, 75), 0)
         else:
             duplicate_exit_code = 75
 
@@ -155,21 +182,15 @@ class Settings:
         raw_idle_timeout = os.environ.get(
             "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_IDLE_TIMEOUT_SECONDS", "0"
         ).strip()
-        try:
-            server_parent_instance_idle_timeout_seconds = max(
-                int(raw_idle_timeout or "0"), 0
-            )
-        except ValueError:
-            server_parent_instance_idle_timeout_seconds = 0
+        server_parent_instance_idle_timeout_seconds = max(
+            _parse_int(raw_idle_timeout, 0), 0
+        )
         raw_parent_monitor_interval = os.environ.get(
             "ISSUE_MEMORY_SERVER_PARENT_INSTANCE_MONITOR_INTERVAL_SECONDS", "1.0"
         ).strip()
-        try:
-            server_parent_instance_monitor_interval_seconds = max(
-                float(raw_parent_monitor_interval or "1.0"), 0.2
-            )
-        except ValueError:
-            server_parent_instance_monitor_interval_seconds = 1.0
+        server_parent_instance_monitor_interval_seconds = max(
+            _parse_float(raw_parent_monitor_interval, 1.0), 0.2
+        )
         owner_key = ""
         owner_key_source = ""
         for env_name in (
@@ -245,27 +266,21 @@ class Settings:
             backup_dir=backup_dir,
             windows_backup_target=windows_target,
             calibration_profile_path=calibration_profile_path,
-            local_backup_keep=int(
-                os.environ.get("ISSUE_MEMORY_LOCAL_BACKUP_KEEP", "30")
-            ),
-            mirror_backup_keep=int(
-                os.environ.get("ISSUE_MEMORY_MIRROR_BACKUP_KEEP", "15")
-            ),
+            local_backup_keep=_parse_int_env("ISSUE_MEMORY_LOCAL_BACKUP_KEEP", 30),
+            mirror_backup_keep=_parse_int_env("ISSUE_MEMORY_MIRROR_BACKUP_KEEP", 15),
             hostname=socket.gethostname(),
             default_user_scope=os.environ.get(
                 "ISSUE_MEMORY_DEFAULT_USER_SCOPE", ""
             ).strip(),
-            match_accept_threshold=float(
-                os.environ.get("ISSUE_MEMORY_MATCH_ACCEPT_THRESHOLD", "0.68")
+            match_accept_threshold=_parse_float_env(
+                "ISSUE_MEMORY_MATCH_ACCEPT_THRESHOLD", 0.68
             ),
-            match_weak_threshold=float(
-                os.environ.get("ISSUE_MEMORY_MATCH_WEAK_THRESHOLD", "0.40")
+            match_weak_threshold=_parse_float_env(
+                "ISSUE_MEMORY_MATCH_WEAK_THRESHOLD", 0.40
             ),
-            ambiguity_margin=float(
-                os.environ.get("ISSUE_MEMORY_AMBIGUITY_MARGIN", "0.09")
-            ),
-            session_ttl_seconds=int(
-                os.environ.get("ISSUE_MEMORY_SESSION_TTL_SECONDS", "21600")
+            ambiguity_margin=_parse_float_env("ISSUE_MEMORY_AMBIGUITY_MARGIN", 0.09),
+            session_ttl_seconds=_parse_int_env(
+                "ISSUE_MEMORY_SESSION_TTL_SECONDS", 21600
             ),
             telemetry_enabled=os.environ.get("ISSUE_MEMORY_TELEMETRY_ENABLED", "1")
             .strip()
@@ -278,13 +293,13 @@ class Settings:
             .lower()
             not in {"0", "false", "no"},
             dense_embedding_dim=max(
-                int(os.environ.get("ISSUE_MEMORY_DENSE_EMBEDDING_DIM", "192")), 32
+                _parse_int_env("ISSUE_MEMORY_DENSE_EMBEDDING_DIM", 192), 32
             ),
             dense_candidate_limit=max(
-                int(os.environ.get("ISSUE_MEMORY_DENSE_CANDIDATE_LIMIT", "16")), 4
+                _parse_int_env("ISSUE_MEMORY_DENSE_CANDIDATE_LIMIT", 16), 4
             ),
-            dense_similarity_floor=float(
-                os.environ.get("ISSUE_MEMORY_DENSE_SIMILARITY_FLOOR", "0.12")
+            dense_similarity_floor=_parse_float_env(
+                "ISSUE_MEMORY_DENSE_SIMILARITY_FLOOR", 0.12
             ),
             dense_model_name=os.environ.get(
                 "ISSUE_MEMORY_DENSE_MODEL_NAME", "hash-ngrams-v1"
@@ -302,23 +317,23 @@ class Settings:
             .strip()
             .lower()
             not in {"0", "false", "no"},
-            strategy_overlay_scale=float(
-                os.environ.get("ISSUE_MEMORY_STRATEGY_OVERLAY_SCALE", "0.20")
+            strategy_overlay_scale=_parse_float_env(
+                "ISSUE_MEMORY_STRATEGY_OVERLAY_SCALE", 0.20
             ),
-            variant_overlay_scale=float(
-                os.environ.get("ISSUE_MEMORY_VARIANT_OVERLAY_SCALE", "0.08")
+            variant_overlay_scale=_parse_float_env(
+                "ISSUE_MEMORY_VARIANT_OVERLAY_SCALE", 0.08
             ),
-            safe_override_margin=float(
-                os.environ.get("ISSUE_MEMORY_SAFE_OVERRIDE_MARGIN", "0.03")
+            safe_override_margin=_parse_float_env(
+                "ISSUE_MEMORY_SAFE_OVERRIDE_MARGIN", 0.03
             ),
             minimum_strategy_evidence=max(
-                int(os.environ.get("ISSUE_MEMORY_MINIMUM_STRATEGY_EVIDENCE", "3")), 1
+                _parse_int_env("ISSUE_MEMORY_MINIMUM_STRATEGY_EVIDENCE", 3), 1
             ),
             strategy_half_life_days=max(
-                int(os.environ.get("ISSUE_MEMORY_STRATEGY_HALF_LIFE_DAYS", "75")), 1
+                _parse_int_env("ISSUE_MEMORY_STRATEGY_HALF_LIFE_DAYS", 75), 1
             ),
             variant_half_life_days=max(
-                int(os.environ.get("ISSUE_MEMORY_VARIANT_HALF_LIFE_DAYS", "35")), 1
+                _parse_int_env("ISSUE_MEMORY_VARIANT_HALF_LIFE_DAYS", 35), 1
             ),
             enable_preference_rules=os.environ.get(
                 "ISSUE_MEMORY_ENABLE_PREFERENCE_RULES", "1"
@@ -326,22 +341,20 @@ class Settings:
             .strip()
             .lower()
             not in {"0", "false", "no"},
-            preference_overlay_scale=float(
-                os.environ.get("ISSUE_MEMORY_PREFERENCE_OVERLAY_SCALE", "1.0")
+            preference_overlay_scale=_parse_float_env(
+                "ISSUE_MEMORY_PREFERENCE_OVERLAY_SCALE", 1.0
             ),
-            max_preference_adjustment=float(
-                os.environ.get("ISSUE_MEMORY_MAX_PREFERENCE_ADJUSTMENT", "0.18")
+            max_preference_adjustment=_parse_float_env(
+                "ISSUE_MEMORY_MAX_PREFERENCE_ADJUSTMENT", 0.18
             ),
             guardrail_limit=max(
-                int(os.environ.get("ISSUE_MEMORY_GUARDRAIL_LIMIT", "5")), 1
+                _parse_int_env("ISSUE_MEMORY_GUARDRAIL_LIMIT", 5), 1
             ),
             telemetry_retention_days=max(
-                int(os.environ.get("ISSUE_MEMORY_TELEMETRY_RETENTION_DAYS", "90")), 1
+                _parse_int_env("ISSUE_MEMORY_TELEMETRY_RETENTION_DAYS", 90), 1
             ),
             resolved_review_retention_days=max(
-                int(
-                    os.environ.get("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", "120")
-                ),
+                _parse_int_env("ISSUE_MEMORY_RESOLVED_REVIEW_RETENTION_DAYS", 120),
                 1,
             ),
             enable_redaction=os.environ.get("ISSUE_MEMORY_ENABLE_REDACTION", "1")
@@ -355,19 +368,11 @@ class Settings:
             .lower()
             not in {"0", "false", "no"},
             session_decay_half_life_minutes=max(
-                float(
-                    os.environ.get(
-                        "ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES", "30.0"
-                    )
-                ),
+                _parse_float_env("ISSUE_MEMORY_SESSION_DECAY_HALF_LIFE_MINUTES", 30.0),
                 1.0,
             ),
             implicit_feedback_timeout_minutes=max(
-                int(
-                    os.environ.get(
-                        "ISSUE_MEMORY_IMPLICIT_FEEDBACK_TIMEOUT_MINUTES", "30"
-                    )
-                ),
+                _parse_int_env("ISSUE_MEMORY_IMPLICIT_FEEDBACK_TIMEOUT_MINUTES", 30),
                 5,
             ),
             enable_cross_session_learning=os.environ.get(
@@ -377,7 +382,7 @@ class Settings:
             .lower()
             not in {"0", "false", "no"},
             auto_rejection_threshold=max(
-                int(os.environ.get("ISSUE_MEMORY_AUTO_REJECTION_THRESHOLD", "3")), 2
+                _parse_int_env("ISSUE_MEMORY_AUTO_REJECTION_THRESHOLD", 3), 2
             ),
             max_mcp_instances=max_mcp_instances,
             server_lock_dir=server_lock_dir,
@@ -390,34 +395,26 @@ class Settings:
             server_owner_key_env=owner_key_env,
             server_owner_role=owner_role,
             fp_rate_alarm_threshold=max(
-                float(os.environ.get("ISSUE_MEMORY_FP_RATE_ALARM_THRESHOLD", "0.15")),
+                _parse_float_env("ISSUE_MEMORY_FP_RATE_ALARM_THRESHOLD", 0.15),
                 0.01,
             ),
             feedback_batch_window_seconds=max(
-                int(
-                    os.environ.get("ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS", "300")
-                ),
+                _parse_int_env("ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS", 300),
                 0,
             ),
             feedback_batch_fp_review_threshold=max(
-                int(
-                    os.environ.get(
-                        "ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD", "5"
-                    )
-                ),
+                _parse_int_env("ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD", 5),
                 2,
             ),
             env_json_max_chars=max(
-                int(os.environ.get("ISSUE_MEMORY_ENV_JSON_MAX_CHARS", "4000")), 256
+                _parse_int_env("ISSUE_MEMORY_ENV_JSON_MAX_CHARS", 4000), 256
             ),
             verification_output_max_chars=max(
-                int(
-                    os.environ.get("ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS", "4000")
-                ),
+                _parse_int_env("ISSUE_MEMORY_VERIFICATION_OUTPUT_MAX_CHARS", 4000),
                 256,
             ),
             note_max_chars=max(
-                int(os.environ.get("ISSUE_MEMORY_NOTE_MAX_CHARS", "2000")), 128
+                _parse_int_env("ISSUE_MEMORY_NOTE_MAX_CHARS", 2000), 128
             ),
         )
         settings.ensure_dirs()

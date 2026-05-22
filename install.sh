@@ -13,11 +13,37 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 SKIP_DEP_INSTALL="${SKIP_DEP_INSTALL:-0}"
 SKIP_CRON_INSTALL="${SKIP_CRON_INSTALL:-0}"
 
+RAW_INSTALL_ROOT="${INSTALL_ROOT%/}"
+INSTALL_ROOT_CANON="$(realpath -m -- "$INSTALL_ROOT")"
+SCRIPT_SOURCE_CANON="$(realpath -m -- "$SCRIPT_SOURCE_DIR")"
+HOME_CANON="$(realpath -m -- "$HOME")"
+COPY_IN_PLACE=0
+case "$RAW_INSTALL_ROOT" in
+  ""|"/"|"."|".."|"$HOME")
+    echo "Refusing destructive copy for dangerous INSTALL_ROOT: $INSTALL_ROOT" >&2
+    exit 1
+    ;;
+esac
+case "$INSTALL_ROOT_CANON" in
+  ""|"/"|"$HOME_CANON")
+    echo "Refusing destructive copy for dangerous INSTALL_ROOT: $INSTALL_ROOT" >&2
+    exit 1
+    ;;
+esac
+if [[ "$INSTALL_ROOT_CANON" == "$SCRIPT_SOURCE_CANON" ]]; then
+  COPY_IN_PLACE=1
+elif [[ "$INSTALL_ROOT_CANON" == "$SCRIPT_SOURCE_CANON"/* ]] || [[ "$SCRIPT_SOURCE_CANON" == "$INSTALL_ROOT_CANON"/* ]]; then
+  echo "Refusing destructive copy between nested source/install paths: $INSTALL_ROOT" >&2
+  exit 1
+fi
+
 echo "[1/7] Creating directory layout..."
 mkdir -p "$INSTALL_ROOT" "$DATA_ROOT" "$STATE_ROOT" "$BACKUP_ROOT" "$CODEX_HOME"
 
 echo "[2/7] Copying bundle into install root..."
-if command -v rsync >/dev/null 2>&1; then
+if [[ "$COPY_IN_PLACE" == "1" ]]; then
+  echo "Install root is the source directory; skipping bundle copy."
+elif command -v rsync >/dev/null 2>&1; then
   rsync -a --delete \
     --exclude ".venv" \
     --exclude "__pycache__" \

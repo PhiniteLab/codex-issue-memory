@@ -41,6 +41,7 @@ python -m codex_issue_memory.maintenance server-status
 python -m codex_issue_memory.maintenance metrics --window-days 14
 python -m codex_issue_memory.maintenance runtime-diagnostics
 python -m codex_issue_memory.maintenance e2e-mcp-reuse-harness --json
+python -m codex_issue_memory.maintenance quality-gate-benchmarks
 python -m codex_issue_memory.maintenance benchmark-real-world
 python -m codex_issue_memory.maintenance benchmark-hard-negatives
 python -m codex_issue_memory.maintenance benchmark-merge-stress
@@ -97,6 +98,7 @@ Recommended additional checks when relevant:
 - `python -m codex_issue_memory.maintenance smoke-learning`
 - `python -m codex_issue_memory.maintenance server-status`
 - `python -m codex_issue_memory.maintenance e2e-mcp-reuse-harness --json`
+- `python -m codex_issue_memory.maintenance quality-gate-benchmarks`
 - `python -m codex_issue_memory.maintenance metrics --window-days 14`
 - `pyright`
 - targeted benchmark commands if you changed retrieval, learning, or consolidation behavior
@@ -146,6 +148,7 @@ Before modifying retrieval, ranking, learning, or feedback code, read:
 2. [`ROADMAP.md`](ROADMAP.md) — the development plan describes known gaps and planned improvements
 3. Run the relevant benchmarks before and after changes:
    ```bash
+   python -m codex_issue_memory.maintenance quality-gate-benchmarks
    python -m codex_issue_memory.maintenance benchmark-real-world
    python -m codex_issue_memory.maintenance benchmark-hard-negatives
    python -m codex_issue_memory.maintenance benchmark-dense-bandit

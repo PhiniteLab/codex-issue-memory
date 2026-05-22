@@ -209,7 +209,7 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
             )
 
     def test_flush_feedback_batch(self) -> None:
-        """Enqueued items can be flushed (applied)."""
+        """Flushing materializes pending feedback exactly once and updates learning state."""
         os.environ["ISSUE_MEMORY_FEEDBACK_BATCH_FP_REVIEW_THRESHOLD"] = "2"
         os.environ["ISSUE_MEMORY_FEEDBACK_BATCH_WINDOW_SECONDS"] = "600"
         self.app = IssueMemoryApp()
@@ -224,16 +224,117 @@ class Phase5OperationalMaturityTests(unittest.TestCase):
                 candidate_rank=1,
             )
         match = self._match_and_get_event()
+        retrieval_event_id = int(match["retrieval_event_id"])
         batched = self.app.issue_feedback(
-            retrieval_event_id=int(match["retrieval_event_id"]),
+            retrieval_event_id=retrieval_event_id,
             feedback_type="false_positive",
             candidate_rank=1,
         )
         self.assertEqual(batched["status"], "batched")
+        candidate = self.app.store.resolve_retrieval_candidate(
+            retrieval_event_id=retrieval_event_id,
+            candidate_rank=1,
+        )
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        pattern_id = int(candidate["pattern_id"])
+        variant_id = int(candidate["variant_id"])
 
-        flushed = self.app.store.flush_feedback_batch()
+        store = self.app.store
+        with store.managed_connection() as conn:
+            feedback_count_before = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM feedback_events WHERE feedback_type = 'false_positive'"
+            ).fetchone()
+            queue_before = conn.execute(
+                "SELECT status, applied_at FROM feedback_batch_queue ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            variant_before = conn.execute(
+                "SELECT reject_count FROM issue_variants WHERE id = ?",
+                (variant_id,),
+            ).fetchone()
+            pattern_before = conn.execute(
+                "SELECT confidence FROM issue_patterns WHERE id = ?",
+                (pattern_id,),
+            ).fetchone()
+            variant_stat_before = conn.execute(
+                "SELECT failure_count FROM variant_stats WHERE variant_id = ?",
+                (variant_id,),
+            ).fetchone()
+        self.assertIsNotNone(feedback_count_before)
+        self.assertEqual(feedback_count_before["cnt"], 2)
+        self.assertIsNotNone(queue_before)
+        self.assertEqual(queue_before["status"], "pending")
+        self.assertIsNone(queue_before["applied_at"])
+        self.assertIsNotNone(variant_before)
+        self.assertIsNotNone(pattern_before)
+        self.assertIsNotNone(variant_stat_before)
+
+        flushed = store.flush_feedback_batch()
         self.assertEqual(len(flushed), 1)
         self.assertEqual(flushed[0]["feedback_type"], "false_positive")
+        self.assertEqual(flushed[0]["status"], "applied")
+        self.assertEqual(flushed[0]["retrieval_event_id"], retrieval_event_id)
+        self.assertIsInstance(flushed[0]["feedback_event_id"], int)
+        self.assertTrue(flushed[0]["global_update_applied"])
+
+        with store.managed_connection() as conn:
+            feedback_count_after = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM feedback_events WHERE feedback_type = 'false_positive'"
+            ).fetchone()
+            per_event_feedback = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM feedback_events WHERE retrieval_event_id = ?",
+                (retrieval_event_id,),
+            ).fetchone()
+            queue_after = conn.execute(
+                "SELECT status, applied_at FROM feedback_batch_queue ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            retrieval_after = conn.execute(
+                "SELECT has_feedback FROM retrieval_events WHERE id = ?",
+                (retrieval_event_id,),
+            ).fetchone()
+            variant_after = conn.execute(
+                "SELECT reject_count FROM issue_variants WHERE id = ?",
+                (variant_id,),
+            ).fetchone()
+            pattern_after = conn.execute(
+                "SELECT confidence FROM issue_patterns WHERE id = ?",
+                (pattern_id,),
+            ).fetchone()
+            variant_stat_after = conn.execute(
+                "SELECT failure_count FROM variant_stats WHERE variant_id = ?",
+                (variant_id,),
+            ).fetchone()
+        self.assertIsNotNone(feedback_count_after)
+        self.assertEqual(feedback_count_after["cnt"], 3)
+        self.assertIsNotNone(per_event_feedback)
+        self.assertEqual(per_event_feedback["cnt"], 1)
+        self.assertIsNotNone(queue_after)
+        self.assertEqual(queue_after["status"], "applied")
+        self.assertTrue(queue_after["applied_at"])
+        self.assertIsNotNone(retrieval_after)
+        self.assertEqual(retrieval_after["has_feedback"], 1)
+        self.assertIsNotNone(variant_after)
+        self.assertEqual(
+            variant_after["reject_count"], int(variant_before["reject_count"]) + 1
+        )
+        self.assertIsNotNone(pattern_after)
+        self.assertLess(
+            float(pattern_after["confidence"]), float(pattern_before["confidence"])
+        )
+        self.assertIsNotNone(variant_stat_after)
+        self.assertEqual(
+            variant_stat_after["failure_count"],
+            int(variant_stat_before["failure_count"]) + 1,
+        )
+
+        flushed_again = store.flush_feedback_batch()
+        self.assertEqual(flushed_again, [])
+        with store.managed_connection() as conn:
+            feedback_count_final = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM feedback_events WHERE feedback_type = 'false_positive'"
+            ).fetchone()
+        self.assertIsNotNone(feedback_count_final)
+        self.assertEqual(feedback_count_final["cnt"], 3)
 
     def test_non_fp_feedback_not_gated(self) -> None:
         """Only false_positive feedback triggers the batch gate."""

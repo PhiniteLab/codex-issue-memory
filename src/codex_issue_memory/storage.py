@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Iterator
 from uuid import uuid4
@@ -116,8 +117,17 @@ class IssueMemoryStore:
         report_dir.mkdir(parents=True, exist_ok=True)
         return report_dir
 
+    @staticmethod
+    def _safe_report_name(name: str) -> str:
+        normalized = str(name or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", normalized):
+            raise ValueError(
+                "Report name must be 1-128 chars of letters, numbers, '.', '_' or '-'"
+            )
+        return normalized
+
     def save_report(self, name: str, payload: dict[str, Any]) -> Path:
-        report_path = self.report_dir() / f"{name}.json"
+        report_path = self.report_dir() / f"{self._safe_report_name(name)}.json"
         report_path.write_text(self._json_dumps(payload), encoding="utf-8")
         return report_path
 
@@ -143,7 +153,7 @@ class IssueMemoryStore:
         return rows
 
     def load_saved_report(self, name: str) -> dict[str, Any] | None:
-        path = self.report_dir() / f"{name}.json"
+        path = self.report_dir() / f"{self._safe_report_name(name)}.json"
         if not path.exists():
             return None
         try:
@@ -4127,61 +4137,18 @@ class IssueMemoryStore:
         notes: str,
     ) -> dict[str, Any]:
         with self.managed_connection(immediate=True) as conn:
-            cur = conn.execute(
-                """
-                INSERT INTO feedback_events(
-                    retrieval_event_id, retrieval_candidate_id, pattern_id, variant_id,
-                    episode_id, feedback_type, reward, actor, notes, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    retrieval_event_id,
-                    retrieval_candidate_id,
-                    pattern_id,
-                    variant_id,
-                    episode_id,
-                    feedback_type,
-                    float(reward),
-                    actor,
-                    notes,
-                    utc_now_iso(),
-                ),
-            )
-            if cur.lastrowid is None:
-                raise RuntimeError("Failed to determine feedback event id after insert")
-            feedback_row = conn.execute(
-                "SELECT * FROM feedback_events WHERE id = ?",
-                (int(cur.lastrowid),),
-            ).fetchone()
-            if feedback_row is None:
-                raise RuntimeError(
-                    "Feedback event row could not be loaded after insert"
-                )
-            strong_updates = self._apply_strong_feedback_tx(
+            return self._insert_feedback_event_tx(
                 conn,
                 retrieval_event_id=retrieval_event_id,
+                retrieval_candidate_id=retrieval_candidate_id,
                 pattern_id=pattern_id,
                 variant_id=variant_id,
+                episode_id=episode_id,
                 feedback_type=feedback_type,
                 reward=reward,
+                actor=actor,
                 notes=notes,
             )
-            return {
-                "feedback_row": dict(feedback_row),
-                "pattern_update": strong_updates.get("pattern"),
-                "variant_update": strong_updates.get("variant"),
-                "strategy_stat_updates": strong_updates.get(
-                    "strategy_stat_updates", []
-                ),
-                "variant_stat_update": strong_updates.get("variant_stat_update"),
-                "global_update_applied": bool(
-                    strong_updates.get("global_update_applied", False)
-                ),
-                "negative_applicability_applied": bool(
-                    strong_updates.get("negative_applicability_applied", False)
-                ),
-            }
 
     def log_feature_outcomes(
         self,
@@ -4472,6 +4439,10 @@ class IssueMemoryStore:
     ) -> dict[str, Any]:
         now = utc_now_iso()
         with self.managed_connection(immediate=True) as conn:
+            conn.execute(
+                "UPDATE retrieval_events SET has_feedback = 1 WHERE id = ?",
+                (retrieval_event_id,),
+            )
             cur = conn.execute(
                 """
                 INSERT INTO feedback_batch_queue(
@@ -4510,7 +4481,7 @@ class IssueMemoryStore:
             return int(row["cnt"]) if row else 0
 
     def flush_feedback_batch(self) -> list[dict[str, Any]]:
-        """Apply all pending batched feedback items and return their IDs."""
+        """Apply all pending batched feedback items and return per-row results."""
         with self.managed_connection(immediate=True) as conn:
             rows = conn.execute(
                 "SELECT * FROM feedback_batch_queue WHERE status = 'pending' ORDER BY created_at",
@@ -4518,14 +4489,130 @@ class IssueMemoryStore:
             results: list[dict[str, Any]] = []
             now = utc_now_iso()
             for row in rows:
+                retrieval_event_id = int(row["retrieval_event_id"])
+                conn.execute(
+                    "UPDATE retrieval_events SET has_feedback = 1 WHERE id = ?",
+                    (retrieval_event_id,),
+                )
+                feedback_result = self._insert_feedback_event_tx(
+                    conn,
+                    retrieval_event_id=retrieval_event_id,
+                    retrieval_candidate_id=int(row["retrieval_candidate_id"])
+                    if row["retrieval_candidate_id"] is not None
+                    else None,
+                    pattern_id=int(row["pattern_id"])
+                    if row["pattern_id"] is not None
+                    else None,
+                    variant_id=int(row["variant_id"])
+                    if row["variant_id"] is not None
+                    else None,
+                    episode_id=None,
+                    feedback_type=str(row["feedback_type"]),
+                    reward=float(row["reward"]),
+                    actor=str(row["actor"]),
+                    notes=str(row["notes"]),
+                )
                 conn.execute(
                     "UPDATE feedback_batch_queue SET status = 'applied', applied_at = ? WHERE id = ?",
                     (now, int(row["id"])),
                 )
+                feedback_row = feedback_result["feedback_row"]
                 results.append(
-                    {"id": int(row["id"]), "feedback_type": str(row["feedback_type"])}
+                    {
+                        "id": int(row["id"]),
+                        "status": "applied",
+                        "applied_at": now,
+                        "retrieval_event_id": retrieval_event_id,
+                        "retrieval_candidate_id": int(row["retrieval_candidate_id"])
+                        if row["retrieval_candidate_id"] is not None
+                        else None,
+                        "feedback_event_id": int(feedback_row["id"]),
+                        "feedback_type": str(row["feedback_type"]),
+                        "pattern_update": feedback_result.get("pattern_update"),
+                        "variant_update": feedback_result.get("variant_update"),
+                        "strategy_stat_updates": feedback_result.get(
+                            "strategy_stat_updates", []
+                        ),
+                        "variant_stat_update": feedback_result.get(
+                            "variant_stat_update"
+                        ),
+                        "global_update_applied": bool(
+                            feedback_result.get("global_update_applied", False)
+                        ),
+                        "negative_applicability_applied": bool(
+                            feedback_result.get(
+                                "negative_applicability_applied", False
+                            )
+                        ),
+                    }
                 )
             return results
+
+    def _insert_feedback_event_tx(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        retrieval_event_id: int,
+        retrieval_candidate_id: int | None,
+        pattern_id: int | None,
+        variant_id: int | None,
+        episode_id: int | None,
+        feedback_type: str,
+        reward: float,
+        actor: str,
+        notes: str,
+    ) -> dict[str, Any]:
+        cur = conn.execute(
+            """
+            INSERT INTO feedback_events(
+                retrieval_event_id, retrieval_candidate_id, pattern_id, variant_id,
+                episode_id, feedback_type, reward, actor, notes, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                retrieval_event_id,
+                retrieval_candidate_id,
+                pattern_id,
+                variant_id,
+                episode_id,
+                feedback_type,
+                float(reward),
+                actor,
+                notes,
+                utc_now_iso(),
+            ),
+        )
+        if cur.lastrowid is None:
+            raise RuntimeError("Failed to determine feedback event id after insert")
+        feedback_row = conn.execute(
+            "SELECT * FROM feedback_events WHERE id = ?",
+            (int(cur.lastrowid),),
+        ).fetchone()
+        if feedback_row is None:
+            raise RuntimeError("Feedback event row could not be loaded after insert")
+        strong_updates = self._apply_strong_feedback_tx(
+            conn,
+            retrieval_event_id=retrieval_event_id,
+            pattern_id=pattern_id,
+            variant_id=variant_id,
+            feedback_type=feedback_type,
+            reward=reward,
+            notes=notes,
+        )
+        return {
+            "feedback_row": dict(feedback_row),
+            "pattern_update": strong_updates.get("pattern"),
+            "variant_update": strong_updates.get("variant"),
+            "strategy_stat_updates": strong_updates.get("strategy_stat_updates", []),
+            "variant_stat_update": strong_updates.get("variant_stat_update"),
+            "global_update_applied": bool(
+                strong_updates.get("global_update_applied", False)
+            ),
+            "negative_applicability_applied": bool(
+                strong_updates.get("negative_applicability_applied", False)
+            ),
+        }
 
     @staticmethod
     def _clamp(value: float, *, low: float = 0.0, high: float = 1.0) -> float:
